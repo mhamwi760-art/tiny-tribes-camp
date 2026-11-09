@@ -642,6 +642,7 @@ function initRegistration() {
     // Update the same order if the parent came back to edit it
     if (draft && draft.id && window.TTStore.getOrders().some((o) => o.id === draft.id)) {
       window.TTStore.updateOrder(draft.id, order);
+      window.TTStore.log({ area: "Order", target: draft.id, action: "Parent edited registration", to: `${order.parent.name} · ${order.programName} · ${order.children.length} children` });
       saveDraft(Object.assign({ id: draft.id }, order));
     } else {
       saveDraft(window.TTStore.addOrder(order));
@@ -716,6 +717,7 @@ function initPayment() {
     setTimeout(() => {
       const method = $('input[name="method"]:checked', form).value.toUpperCase();
       window.TTStore.updateOrder(reg.id, { status: "Paid (demo)", method, paidAt: new Date().toISOString() });
+      window.TTStore.log({ area: "Order", target: reg.id, action: "Status changed", from: "Awaiting payment", to: `Paid (demo) by ${method}` });
       $("#payment-content").classList.add("hidden");
       $("#payment-success").classList.remove("hidden");
       $("#success-reference").textContent = reg.id;

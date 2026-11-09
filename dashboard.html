@@ -7,31 +7,61 @@
   <meta name="robots" content="noindex, nofollow">
   <link rel="icon" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/style.css?v=16">
-  <link rel="stylesheet" href="css/dashboard.css?v=18">
-  <script src="js/data.js?v=16" defer></script>
-  <script src="js/store.js?v=16" defer></script>
-  <script src="js/dashboard.js?v=18" defer></script>
+  <link rel="stylesheet" href="css/style.css?v=19">
+  <link rel="stylesheet" href="css/dashboard.css?v=19">
+  <script src="js/data.js?v=19" defer></script>
+  <script src="js/store.js?v=19" defer></script>
+  <script src="js/dashboard.js?v=19" defer></script>
 </head>
-<body class="dash">
+<body class="dash locked">
   <header class="dash-top">
     <a href="index.html" class="brand"><img src="assets/img/logo.png" alt="Tiny Tribes" width="170" height="32"></a>
     <span class="dash-title">Dashboard</span>
+    <span class="who hidden" id="who"></span>
+    <button class="btn btn-secondary btn-sm hidden" id="my-password">Change my password</button>
+    <button class="btn btn-secondary btn-sm hidden" id="logout">Log out</button>
     <a class="btn btn-secondary btn-sm" href="index.html" target="_blank" rel="noopener">View site ↗</a>
   </header>
 
   <div class="demo-banner" role="note">
-    <strong>Demo mode:</strong> everything here is saved only in this browser. Orders and messages from clients on other devices will appear once the site is connected to an online database.
+    <strong>Demo mode:</strong> everything here, including logins, is saved only in this browser. Orders and messages from clients on other devices will appear once the site is connected to an online database.
   </div>
 
-  <div class="dash-layout">
+  <!-- First visit: create the owner account -->
+  <section class="auth hidden" id="setup">
+    <form class="dash-card auth-card" id="setup-form" novalidate>
+      <h1>Create the owner account</h1>
+      <p class="hint">This is your own login. The owner can do everything and creates the employee logins.</p>
+      <div class="field"><label for="s-name">Your name</label><input id="s-name" required autocomplete="name"></div>
+      <div class="field"><label for="s-user">Username</label><input id="s-user" required autocomplete="username" autocapitalize="none"></div>
+      <div class="field"><label for="s-pass">Password (at least 6 characters)</label><input id="s-pass" type="password" required autocomplete="new-password"></div>
+      <div class="field"><label for="s-pass2">Repeat password</label><input id="s-pass2" type="password" required autocomplete="new-password"></div>
+      <p class="form-error hidden" id="setup-error" role="alert"></p>
+      <button class="btn btn-primary" type="submit">Create owner account</button>
+    </form>
+  </section>
+
+  <!-- Login -->
+  <section class="auth hidden" id="login">
+    <form class="dash-card auth-card" id="login-form" novalidate>
+      <h1>Log in</h1>
+      <div class="field"><label for="l-user">Username</label><input id="l-user" required autocomplete="username" autocapitalize="none"></div>
+      <div class="field"><label for="l-pass">Password</label><input id="l-pass" type="password" required autocomplete="current-password"></div>
+      <p class="form-error hidden" id="login-error" role="alert"></p>
+      <button class="btn btn-primary" type="submit">Log in</button>
+    </form>
+  </section>
+
+  <div class="dash-layout hidden" id="app">
     <nav class="dash-nav" aria-label="Dashboard sections">
       <button data-tab="overview" aria-pressed="true">Overview</button>
-      <button data-tab="orders">Orders <span class="count" id="count-orders"></span></button>
-      <button data-tab="cancelled">Cancelled <span class="count" id="count-cancelled"></span></button>
-      <button data-tab="messages">Messages <span class="count" id="count-messages"></span></button>
-      <button data-tab="programs">Programs &amp; prices</button>
-      <button data-tab="photos">Photos</button>
+      <button data-tab="orders" data-need="orders.view">Orders <span class="count" id="count-orders"></span></button>
+      <button data-tab="cancelled" data-need="orders.view">Cancelled <span class="count" id="count-cancelled"></span></button>
+      <button data-tab="messages" data-need="messages.view">Messages <span class="count" id="count-messages"></span></button>
+      <button data-tab="programs" data-need="programs.edit">Programs &amp; prices</button>
+      <button data-tab="photos" data-need="photos.edit">Photos</button>
+      <button data-tab="history" data-need="history.view">History</button>
+      <button data-tab="employees" data-need="owner">Employees</button>
     </nav>
 
     <main class="dash-main" id="main">
@@ -39,10 +69,11 @@
       <section class="tab" id="tab-overview">
         <h1>Overview</h1>
         <div class="stats" id="stats"></div>
-        <div class="dash-card">
+        <div class="dash-card" data-need="orders.view">
           <h2>Latest orders</h2>
           <div id="latest-orders"></div>
         </div>
+        <p class="hint" id="overview-note"></p>
       </section>
 
       <!-- Orders -->
@@ -50,8 +81,8 @@
         <div class="tab-head">
           <h1>Orders</h1>
           <div class="tab-actions">
-            <button class="btn btn-primary btn-sm" id="add-test-order">+ Create test order</button>
-            <button class="btn btn-secondary btn-sm" id="export-orders">Download CSV</button>
+            <button class="btn btn-primary btn-sm" id="add-test-order" data-need="orders.test">+ Create test order</button>
+            <button class="btn btn-secondary btn-sm" id="export-orders" data-need="orders.export">Download CSV</button>
           </div>
         </div>
         <div class="dash-card filters" id="order-filters">
@@ -72,10 +103,7 @@
           </div>
           <div class="filter-foot">
             <span id="orders-shown" role="status"></span>
-            <span>
-              <button class="link-btn" id="clear-filters">Clear filters</button>
-              <button class="link-btn" id="delete-test-orders">Delete all test orders</button>
-            </span>
+            <button class="link-btn" id="clear-filters">Clear filters</button>
           </div>
         </div>
         <div class="dash-card table-wrap">
@@ -85,7 +113,7 @@
             </thead>
             <tbody></tbody>
           </table>
-          <p class="empty hidden" id="orders-empty">No orders yet. They appear here when a parent registers on the site, or use <strong>+ Create test order</strong> to try it out.</p>
+          <p class="empty hidden" id="orders-empty">No orders yet. They appear here when a parent registers on the site.</p>
           <p class="empty hidden" id="orders-nomatch">No orders match your search or filters.</p>
         </div>
       </section>
@@ -94,7 +122,7 @@
       <section class="tab hidden" id="tab-cancelled">
         <div class="tab-head">
           <h1>Cancelled orders</h1>
-          <button class="btn btn-secondary btn-sm" id="export-cancelled">Download CSV</button>
+          <button class="btn btn-secondary btn-sm" id="export-cancelled" data-need="orders.export">Download CSV</button>
         </div>
         <div class="dash-card filters" id="cancel-filters">
           <div class="filter-grid cancel-grid">
@@ -114,9 +142,15 @@
 
       <!-- Messages -->
       <section class="tab hidden" id="tab-messages">
-        <h1>Messages</h1>
+        <div class="tab-head">
+          <h1>Messages</h1>
+          <div class="chips" id="message-box">
+            <button class="chip" data-box="inbox" aria-pressed="true">Inbox</button>
+            <button class="chip" data-box="archived" aria-pressed="false">Archived</button>
+          </div>
+        </div>
         <div id="messages-list"></div>
-        <p class="empty hidden" id="messages-empty">No messages yet. They appear here when someone uses the contact form on the home page.</p>
+        <p class="empty hidden" id="messages-empty">No messages here. New messages appear when someone uses the contact form on the home page.</p>
       </section>
 
       <!-- Programs & prices -->
@@ -140,11 +174,59 @@
           </div>
         </div>
         <div class="chips" id="photo-cats"></div>
-        <p class="hint">The first photo is the category cover on the home page. Use ★ to make a photo the cover.</p>
+        <p class="hint">The first photo is the category cover on the home page. Use ★ to make a photo the cover. Hidden photos stay saved below and can be put back.</p>
         <div class="dash-photos" id="photo-grid"></div>
+        <div id="hidden-photos-wrap" class="hidden">
+          <h2 class="sub-head">Hidden photos</h2>
+          <div class="dash-photos" id="hidden-photos"></div>
+        </div>
       </section>
 
-      <p class="reset-row"><button class="link-btn" id="reset-demo">Reset all demo data</button></p>
+      <!-- History -->
+      <section class="tab hidden" id="tab-history">
+        <h1>History</h1>
+        <div class="dash-card filters" id="history-filters">
+          <div class="filter-grid">
+            <div class="field search-field"><label for="h-search">Search</label>
+              <input type="search" id="h-search" placeholder="Order number, name, what changed…" autocomplete="off">
+            </div>
+            <div class="field"><label for="h-who">Person</label><select id="h-who"></select></div>
+            <div class="field"><label for="h-area">Section</label><select id="h-area"></select></div>
+            <div class="field"><label for="h-from">From date</label><input type="date" id="h-from"></div>
+            <div class="field"><label for="h-to">To date</label><input type="date" id="h-to"></div>
+          </div>
+          <div class="filter-foot"><span id="history-shown" role="status"></span></div>
+        </div>
+        <div class="dash-card table-wrap">
+          <table class="table" id="history-table">
+            <thead><tr><th>When</th><th>Who</th><th>Section</th><th>Item</th><th>What happened</th><th>From</th><th>To</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="empty hidden" id="history-empty">Nothing recorded yet.</p>
+        </div>
+      </section>
+
+      <!-- Employees (owner only) -->
+      <section class="tab hidden" id="tab-employees">
+        <h1>Employees</h1>
+        <form class="dash-card" id="employee-form" novalidate>
+          <h2 id="employee-form-title">Add an employee</h2>
+          <input type="hidden" id="e-id">
+          <div class="grid-2">
+            <div class="field"><label for="e-name">Name</label><input id="e-name" required autocomplete="off"></div>
+            <div class="field"><label for="e-user">Username</label><input id="e-user" required autocomplete="off" autocapitalize="none"></div>
+            <div class="field"><label for="e-pass" id="e-pass-label">Password (at least 6 characters)</label><input id="e-pass" type="text" autocomplete="off"></div>
+          </div>
+          <h3 class="perm-title">What can this employee do?</h3>
+          <div class="perm-grid" id="perm-grid"></div>
+          <p class="form-error hidden" id="employee-error" role="alert"></p>
+          <div class="cancel-actions">
+            <button class="btn btn-primary btn-sm" type="submit" id="employee-save">Add employee</button>
+            <button class="link-btn hidden" type="button" id="employee-cancel">Stop editing</button>
+          </div>
+        </form>
+        <div id="employee-list"></div>
+      </section>
     </main>
   </div>
 </body>
