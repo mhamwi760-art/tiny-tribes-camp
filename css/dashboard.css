@@ -316,3 +316,19 @@ ins { color: #1d6b31; background: #e3f4e6; text-decoration: none; padding: 0 .2e
 .danger-card { border: 2px solid #f3c2c2; margin-top: 2rem; }
 .danger-card h2 { color: var(--red); margin-top: 0; }
 .danger-card .field { max-width: 260px; }
+
+/* HR sections */
+.hr-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .7rem; margin-bottom: 1.2rem; }
+@media (max-width: 800px) { .hr-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.hr-tab { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: .6rem; align-items: center; text-align: left;
+  background: var(--white); border: 2px solid transparent; border-radius: 14px; padding: .8rem 1rem; cursor: pointer; font: inherit; color: var(--ink);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .05); }
+.hr-tab:hover { border-color: var(--line); }
+.hr-tab[aria-pressed="true"] { border-color: var(--red); background: #fff6f3; }
+.hr-ico { grid-row: span 2; font-size: 1.5rem; }
+.hr-tab strong { font-size: .98rem; }
+.hr-tab small { color: var(--muted); font-size: .8rem; font-weight: 600; }
+.hr-tab[aria-pressed="true"] strong { color: var(--red); }
+.hr-alert { background: var(--cream); border-left: 5px solid var(--orange); border-radius: 12px; padding: .8rem 1rem; font-weight: 600; }
+#hr-balances td small { display: block; color: var(--muted); }
+#hr-leave-filter { font: inherit; padding: .35rem .5rem; border-radius: 8px; border: 1px solid var(--line); }

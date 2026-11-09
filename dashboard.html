@@ -8,11 +8,11 @@
   <link rel="icon" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/style.css?v=19">
-  <link rel="stylesheet" href="css/dashboard.css?v=25">
+  <link rel="stylesheet" href="css/dashboard.css?v=26">
   <script src="js/data.js?v=19" defer></script>
   <script src="js/store.js?v=19" defer></script>
   <script src="js/excel.js?v=24" defer></script>
-  <script src="js/dashboard.js?v=25" defer></script>
+  <script src="js/dashboard.js?v=26" defer></script>
 </head>
 <body class="dash locked">
   <header class="dash-top">
@@ -210,46 +210,85 @@
         </div>
       </section>
 
-      <!-- HR (owner only) -->
+      <!-- HR (owner only), split into 4 parts -->
       <section class="tab hidden" id="tab-hr">
         <h1>HR</h1>
         <p class="empty hidden" id="hr-empty">No employees yet. Add them in the Employees tab first.</p>
         <div id="hr-content">
-          <div class="dash-card table-wrap">
-            <h2 class="card-title">Today</h2>
-            <table class="table" id="hr-today">
-              <thead><tr><th>Employee</th><th>Status</th><th>First login</th><th>Last login</th><th>Last logout</th><th>Logins</th></tr></thead>
-              <tbody></tbody>
-            </table>
+          <div class="hr-nav" aria-label="HR sections">
+            <button class="hr-tab" data-view="today" aria-pressed="true"><span class="hr-ico" aria-hidden="true">🕘</span><strong>Attendance</strong><small id="hr-sum-today"></small></button>
+            <button class="hr-tab" data-view="staff" aria-pressed="false"><span class="hr-ico" aria-hidden="true">👤</span><strong>Staff &amp; salary</strong><small id="hr-sum-staff"></small></button>
+            <button class="hr-tab" data-view="leave" aria-pressed="false"><span class="hr-ico" aria-hidden="true">🌴</span><strong>Leave</strong><small id="hr-sum-leave"></small></button>
+            <button class="hr-tab" data-view="payroll" aria-pressed="false"><span class="hr-ico" aria-hidden="true">💰</span><strong>Payroll</strong><small id="hr-sum-payroll"></small></button>
           </div>
-          <div class="dash-card table-wrap">
-            <h2 class="card-title">Job, pay and leave <small>(<span id="hr-year"></span>)</small></h2>
-            <table class="table" id="hr-staff">
-              <thead><tr><th>Employee</th><th>Job</th><th>Salary</th><th>Annual leave</th><th>Sick leave</th><th></th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <div class="dash-card table-wrap">
-            <div class="tab-head card-title">
-              <h2>Payroll</h2>
-              <div class="tab-actions">
-                <label class="refund-pick" for="pay-month">Month <input type="month" id="pay-month"></label>
-                <button class="btn btn-secondary btn-sm" id="pay-excel">Download Excel</button>
-              </div>
+
+          <!-- Attendance -->
+          <div class="hr-view" data-view="today">
+            <div class="dash-card table-wrap">
+              <h2 class="card-title">Who logged in today</h2>
+              <table class="table" id="hr-today">
+                <thead><tr><th>Employee</th><th>Status</th><th>First login</th><th>Last login</th><th>Last logout</th><th>Logins</th></tr></thead>
+                <tbody></tbody>
+              </table>
             </div>
-            <table class="table" id="hr-payroll">
-              <thead><tr><th>Employee</th><th>Monthly salary</th><th>Bonus</th><th>Deduction</th><th>Note</th><th>Net to pay</th><th>Status</th></tr></thead>
-              <tbody></tbody>
-            </table>
-            <p class="filter-foot pad" id="pay-total"></p>
           </div>
-          <div class="dash-card table-wrap">
-            <h2 class="card-title">All leave and requests</h2>
-            <table class="table" id="hr-leave">
-              <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Note</th><th>Added</th><th>Status</th><th></th></tr></thead>
-              <tbody></tbody>
-            </table>
-            <p class="empty" id="hr-leave-empty">No leave yet. Employees can request it in their <strong>My leave</strong> tab, or use <strong>Add leave</strong> above.</p>
+
+          <!-- Staff & salary -->
+          <div class="hr-view hidden" data-view="staff">
+            <div class="dash-card table-wrap">
+              <h2 class="card-title">Job and monthly salary</h2>
+              <table class="table" id="hr-staff">
+                <thead><tr><th>Employee</th><th>Job title</th><th>Start date</th><th>Monthly salary</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Leave -->
+          <div class="hr-view hidden" data-view="leave">
+            <p class="hr-alert hidden" id="hr-pending-note"></p>
+            <div class="dash-card table-wrap">
+              <h2 class="card-title">Leave balances <small>(<span id="hr-year"></span>)</small></h2>
+              <table class="table" id="hr-balances">
+                <thead><tr><th>Employee</th><th>Annual leave</th><th>Sick leave</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="dash-card table-wrap">
+              <div class="tab-head card-title">
+                <h2>All leave and requests</h2>
+                <select id="hr-leave-filter" aria-label="Show">
+                  <option value="">All</option>
+                  <option value="pending">Waiting for approval</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <table class="table" id="hr-leave">
+                <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Note</th><th>Added</th><th>Status</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+              <p class="empty" id="hr-leave-empty">No leave yet. Employees can request it in their <strong>My leave</strong> tab, or use <strong>Add leave</strong> in the balances above.</p>
+            </div>
+          </div>
+
+          <!-- Payroll -->
+          <div class="hr-view hidden" data-view="payroll">
+            <div class="dash-card table-wrap">
+              <div class="tab-head card-title">
+                <h2>Payroll</h2>
+                <div class="tab-actions">
+                  <label class="refund-pick" for="pay-month">Month <input type="month" id="pay-month"></label>
+                  <button class="btn btn-secondary btn-sm" id="pay-excel">Download Excel</button>
+                </div>
+              </div>
+              <table class="table" id="hr-payroll">
+                <thead><tr><th>Employee</th><th>Monthly salary</th><th>Bonus</th><th>Deduction</th><th>Note</th><th>Net to pay</th><th>Status</th></tr></thead>
+                <tbody></tbody>
+              </table>
+              <p class="filter-foot pad" id="pay-total"></p>
+            </div>
           </div>
         </div>
       </section>

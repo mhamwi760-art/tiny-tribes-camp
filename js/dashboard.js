@@ -1259,8 +1259,22 @@
       })
       .join("");
 
-    // 2. Job, salary and leave balances
+    // 2. Job and salary
     $("#hr-staff tbody").innerHTML = people
+      .map((u) => {
+        const hr = hrOf(u);
+        return `<tr data-id="${esc(u.id)}">
+          <td><strong>${esc(u.name)}</strong><small>@${esc(u.username)}${u.active ? "" : " · switched off"}</small></td>
+          <td>${esc(hr.job || "—")}</td>
+          <td>${esc(hr.startDate || "—")}</td>
+          <td><strong>${kwd(hr.salary)}</strong></td>
+          <td style="white-space:nowrap"><button class="link-btn hr-edit">Edit job &amp; salary</button></td>
+        </tr>`;
+      })
+      .join("");
+
+    // Leave balances
+    $("#hr-balances tbody").innerHTML = people
       .map((u) => {
         const hr = hrOf(u);
         const aUsed = leaveUsed(u.id, "annual", year);
@@ -1268,21 +1282,33 @@
         const aWait = leaveDays(u.id, "annual", year, "pending");
         const sWait = leaveDays(u.id, "sick", year, "pending");
         return `<tr data-id="${esc(u.id)}">
-          <td><strong>${esc(u.name)}</strong><small>@${esc(u.username)}${u.active ? "" : " · switched off"}</small></td>
-          <td>${esc(hr.job || "—")}${hr.startDate ? `<small>Since ${esc(hr.startDate)}</small>` : ""}</td>
-          <td><strong>${kwd(hr.salary)}</strong><small>per month</small></td>
+          <td><strong>${esc(u.name)}</strong><small>${esc(hr.job || "")}</small></td>
           <td><strong class="${hr.annual - aUsed <= 0 ? "neg" : ""}">${hr.annual - aUsed}</strong> of ${hr.annual} left<small>${aUsed} used${aWait ? ` · ${aWait} waiting` : ""}</small></td>
           <td><strong class="${hr.sick - sUsed <= 0 ? "neg" : ""}">${hr.sick - sUsed}</strong> of ${hr.sick} left<small>${sUsed} used${sWait ? ` · ${sWait} waiting` : ""}</small></td>
-          <td style="white-space:nowrap"><button class="link-btn hr-edit">Edit job &amp; salary</button><button class="link-btn hr-leave">Add leave</button></td>
+          <td style="white-space:nowrap"><button class="link-btn hr-leave">Add leave</button><button class="link-btn hr-edit">Change yearly days</button></td>
         </tr>`;
       })
       .join("");
 
     // 3. All leave (requests and leave added by the owner)
-    $("#hr-leave-empty").classList.toggle("hidden", leave.length > 0);
-    $("#hr-leave tbody").innerHTML = leave.map((l) => leaveRow(l, { who: true, cancel: true })).join("");
+    const show = $("#hr-leave-filter").value;
+    const shownLeave = leave.filter((l) => !show || leaveStatus(l) === show);
+    $("#hr-leave-empty").classList.toggle("hidden", shownLeave.length > 0);
+    $("#hr-leave tbody").innerHTML = shownLeave.map((l) => leaveRow(l, { who: true, cancel: true })).join("");
+    const pending = leave.filter((l) => leaveStatus(l) === "pending").length;
+    $("#hr-pending-note").classList.toggle("hidden", !pending);
+    $("#hr-pending-note").innerHTML = pending
+      ? `${pending} leave ${pending === 1 ? "request is" : "requests are"} waiting. <button class="link-btn go-requests">Review requests</button>`
+      : "";
+
+    // Short counts under each section button
+    const inToday = people.filter((u) => hist.some((h) => h.area === "Login" && h.action === "Logged in" && h.byId === u.id && dayKey(h.at) === today)).length;
+    $("#hr-sum-today").textContent = `${inToday} of ${people.length} logged in today`;
+    $("#hr-sum-staff").textContent = `${people.length} ${people.length === 1 ? "employee" : "employees"}`;
+    $("#hr-sum-leave").textContent = pending ? `${pending} waiting for approval` : "Balances and requests";
 
     renderPayroll();
+    showHRView(hrView);
   }
 
   function leaveRow(l, opts) {
@@ -1340,6 +1366,7 @@
     const total = rows.reduce((n, r) => n + r.net, 0);
     const unpaid = rows.filter((r) => !r.rec.paid).reduce((n, r) => n + r.net, 0);
     $("#pay-total").textContent = rows.length ? `Total ${kwd(total)} · still to pay ${kwd(unpaid)}` : "No active employees.";
+    $("#hr-sum-payroll").textContent = rows.length ? (unpaid ? `${kwd(unpaid)} to pay` : "All paid this month") : "";
   }
 
   function savePayroll(month, userId, changes, logEntry) {
@@ -1434,8 +1461,23 @@
     return dlg;
   }
 
-  $("#hr-staff").addEventListener("click", (e) => {
-    const row = e.target.closest("tr");
+  let hrView = "today";
+  function showHRView(view) {
+    hrView = view;
+    $$(".hr-tab").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === view)));
+    $$(".hr-view").forEach((v) => v.classList.toggle("hidden", v.dataset.view !== view));
+  }
+  $(".hr-nav").addEventListener("click", (e) => {
+    const b = e.target.closest(".hr-tab");
+    if (b) showHRView(b.dataset.view);
+  });
+  $("#hr-leave-filter").addEventListener("change", renderHR);
+  $("#hr-pending-note").addEventListener("click", (e) => {
+    if (e.target.matches(".go-requests")) showTab("requests");
+  });
+
+  $("#tab-hr").addEventListener("click", (e) => {
+    const row = e.target.closest("#hr-staff tr[data-id], #hr-balances tr[data-id]");
     if (!row || !(e.target.matches(".hr-edit") || e.target.matches(".hr-leave")) || !guard("owner")) return;
     const u = findUser(row.dataset.id);
     const hr = hrOf(u);
