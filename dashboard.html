@@ -8,11 +8,11 @@
   <link rel="icon" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/style.css?v=19">
-  <link rel="stylesheet" href="css/dashboard.css?v=20">
+  <link rel="stylesheet" href="css/dashboard.css?v=24">
   <script src="js/data.js?v=19" defer></script>
   <script src="js/store.js?v=19" defer></script>
-  <script src="js/excel.js?v=22" defer></script>
-  <script src="js/dashboard.js?v=20" defer></script>
+  <script src="js/excel.js?v=24" defer></script>
+  <script src="js/dashboard.js?v=24" defer></script>
 </head>
 <body class="dash locked">
   <header class="dash-top">
@@ -63,6 +63,9 @@
       <button data-tab="photos" data-need="photos.edit">Photos</button>
       <button data-tab="history" data-need="history.view">History</button>
       <button data-tab="employees" data-need="owner">Employees</button>
+      <button data-tab="hr" data-need="owner">HR</button>
+      <button data-tab="requests" data-need="hr.approve">Leave requests <span class="count" id="count-requests"></span></button>
+      <button data-tab="myleave" data-need="staff">My leave</button>
     </nav>
 
     <main class="dash-main" id="main">
@@ -204,6 +207,92 @@
             <tbody></tbody>
           </table>
           <p class="empty hidden" id="history-empty">Nothing recorded yet.</p>
+        </div>
+      </section>
+
+      <!-- HR (owner only) -->
+      <section class="tab hidden" id="tab-hr">
+        <h1>HR</h1>
+        <p class="empty hidden" id="hr-empty">No employees yet. Add them in the Employees tab first.</p>
+        <div id="hr-content">
+          <div class="dash-card table-wrap">
+            <h2 class="card-title">Today</h2>
+            <table class="table" id="hr-today">
+              <thead><tr><th>Employee</th><th>Status</th><th>First login</th><th>Last login</th><th>Last logout</th><th>Logins</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="dash-card table-wrap">
+            <h2 class="card-title">Job, pay and leave <small>(<span id="hr-year"></span>)</small></h2>
+            <table class="table" id="hr-staff">
+              <thead><tr><th>Employee</th><th>Job</th><th>Salary</th><th>Annual leave</th><th>Sick leave</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="dash-card table-wrap">
+            <div class="tab-head card-title">
+              <h2>Payroll</h2>
+              <div class="tab-actions">
+                <label class="refund-pick" for="pay-month">Month <input type="month" id="pay-month"></label>
+                <button class="btn btn-secondary btn-sm" id="pay-excel">Download Excel</button>
+              </div>
+            </div>
+            <table class="table" id="hr-payroll">
+              <thead><tr><th>Employee</th><th>Monthly salary</th><th>Bonus</th><th>Deduction</th><th>Note</th><th>Net to pay</th><th>Status</th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <p class="filter-foot pad" id="pay-total"></p>
+          </div>
+          <div class="dash-card table-wrap">
+            <h2 class="card-title">All leave and requests</h2>
+            <table class="table" id="hr-leave">
+              <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Note</th><th>Added</th><th>Status</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <p class="empty" id="hr-leave-empty">No leave yet. Employees can request it in their <strong>My leave</strong> tab, or use <strong>Add leave</strong> above.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Leave requests (owner and approvers) -->
+      <section class="tab hidden" id="tab-requests">
+        <h1>Leave requests</h1>
+        <div id="requests-list"></div>
+        <p class="empty hidden" id="requests-empty">No requests waiting. 🎉</p>
+        <div class="dash-card table-wrap">
+          <h2 class="card-title">Recently decided</h2>
+          <table class="table" id="requests-done">
+            <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Note</th><th>Asked</th><th>Decision</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="empty" id="requests-done-empty">Nothing decided yet.</p>
+        </div>
+      </section>
+
+      <!-- My leave (each employee) -->
+      <section class="tab hidden" id="tab-myleave">
+        <h1>My leave</h1>
+        <div class="stats two" id="my-balances"></div>
+        <form class="dash-card" id="request-form" novalidate>
+          <h2>Request leave</h2>
+          <div class="grid-2">
+            <div class="field"><label for="rq-type">Type</label><select id="rq-type"><option value="annual">Annual leave (day off)</option><option value="sick">Sick leave</option></select></div>
+            <div class="field"><label for="rq-note">Note (optional)</label><input id="rq-note" placeholder="e.g. family event, feeling sick"></div>
+            <div class="field"><label for="rq-from">From</label><input id="rq-from" type="date"></div>
+            <div class="field"><label for="rq-to">To (same day for one day)</label><input id="rq-to" type="date"></div>
+          </div>
+          <p class="hint">Only Sunday to Thursday are counted. Your request goes to the owner or a manager to approve.</p>
+          <p class="form-error hidden" id="request-error" role="alert"></p>
+          <button class="btn btn-primary btn-sm" type="submit">Send request</button>
+          <span class="saved hidden" id="request-sent" role="status">Request sent.</span>
+        </form>
+        <div class="dash-card table-wrap">
+          <h2 class="card-title">My requests and leave</h2>
+          <table class="table" id="my-leave">
+            <thead><tr><th>Type</th><th>Dates</th><th>Days</th><th>Note</th><th>Asked</th><th>Status</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="empty" id="my-leave-empty">No requests yet.</p>
         </div>
       </section>
 

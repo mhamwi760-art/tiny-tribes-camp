@@ -53,7 +53,8 @@
     ["messages.manage", "Mark messages read and archive them"],
     ["programs.edit", "Edit programs and prices"],
     ["photos.edit", "Add, hide and reorder photos"],
-    ["history.view", "See the history of changes"]
+    ["history.view", "See the history of changes"],
+    ["hr.approve", "Approve or reject leave requests"]
   ];
   const permLabel = (k) => (PERMS.find(([p]) => p === k) || [k, k])[1];
   const SESSION_KEY = "tt-dash-session";
@@ -75,7 +76,11 @@
     return { salt, hash: await hashPassword(password, salt) };
   }
 
-  const can = (perm) => !!me && (me.role === "owner" || (perm !== "owner" && (me.perms || []).includes(perm)));
+  const can = (perm) => {
+    if (!me) return false;
+    if (perm === "staff") return me.role !== "owner"; // things only employees have, like "My leave"
+    return me.role === "owner" || (perm !== "owner" && (me.perms || []).includes(perm));
+  };
   const findUser = (id) => store.getUsers().find((u) => u.id === id);
 
   function setActor(user) {
@@ -237,7 +242,10 @@
       programs: renderPrograms,
       photos: renderPhotos,
       history: renderHistory,
-      employees: renderEmployees
+      employees: renderEmployees,
+      hr: renderHR,
+      myleave: renderMyLeave,
+      requests: renderRequests
     })[name]();
   }
 
@@ -249,6 +257,7 @@
     $("#count-cancelled").textContent = toRefund || "";
     $("#count-cancelled").title = toRefund ? `${toRefund} not refunded` : "";
     $("#count-messages").textContent = unread || "";
+    updateLeaveCount();
   }
 
   // History entries for one item (shown inside order details)
@@ -1149,6 +1158,462 @@
     }
     resetEmployeeForm();
     renderEmployees();
+  });
+
+  /* ==========================================================
+     HR: logins today, job and monthly salary, leave and payroll.
+     - The HR tab is for the owner.
+     - Every employee has a "My leave" tab to request days off.
+     - The owner, or employees allowed to "approve leave",
+       approve or reject requests in "Leave requests".
+     Nothing is deleted: leave is cancelled or rejected, and
+     every change is logged in the history.
+     ========================================================== */
+  const HR_KEYS = { leave: "tt-leave", payroll: "tt-payroll" };
+  const ANNUAL_DAYS = 30;
+  const SICK_DAYS = 14;
+  const readList = (k, fallback) => {
+    try { return JSON.parse(localStorage.getItem(k)) || fallback; } catch (e) { return fallback; }
+  };
+  const writeList = (k, v) => {
+    try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { alert("Could not save: the browser storage is full."); return false; }
+  };
+  const staff = () => store.getUsers().filter((u) => u.role !== "owner");
+  const hrOf = (u) => Object.assign({ job: "", salary: 0, startDate: "", annual: ANNUAL_DAYS, sick: SICK_DAYS }, u.hr || {});
+  const timeOnly = (iso) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const todayKey = () => dayKey(nowIso());
+  const thisMonth = () => todayKey().slice(0, 7);
+  const kwd = (n) => `KWD ${Number(n || 0).toFixed(3)}`;
+  const typeName = (t) => (t === "sick" ? "Sick leave" : "Annual leave");
+  const leaveStatus = (l) => (l.cancelled ? "cancelled" : l.status || "approved");
+  const STATUS_LABEL = { pending: "Waiting for approval", approved: "Approved", rejected: "Rejected", cancelled: "Cancelled" };
+  const STATUS_CLASS = { pending: "", approved: "paid", rejected: "cancelled", cancelled: "cancelled" };
+  const leaveList = () => readList(HR_KEYS.leave, []);
+
+  // Leave days count working days only (Sunday to Thursday; Friday and Saturday are the weekend)
+  function workingDays(from, to) {
+    let n = 0;
+    const d = new Date(`${from}T12:00:00`);
+    const end = new Date(`${to}T12:00:00`);
+    while (d <= end) {
+      const wd = d.getDay();
+      if (wd !== 5 && wd !== 6) n++;
+      d.setDate(d.getDate() + 1);
+    }
+    return n;
+  }
+
+  function leaveDays(userId, type, year, status) {
+    return leaveList()
+      .filter((l) => l.userId === userId && l.type === type && leaveStatus(l) === status && l.from.slice(0, 4) === String(year))
+      .reduce((n, l) => n + l.days, 0);
+  }
+  const leaveUsed = (userId, type, year) => leaveDays(userId, type, year, "approved");
+
+  // Check dates and balance; returns { days } or { problem }
+  function checkLeave(u, type, from, to) {
+    if (!from || !to) return { problem: "Please pick the dates." };
+    if (to < from) return { problem: "The end date is before the start date." };
+    if (from.slice(0, 4) !== to.slice(0, 4)) return { problem: "Please split leave that goes into the next year into two parts." };
+    const days = workingDays(from, to);
+    if (!days) return { problem: "Those dates are only weekend days (Friday and Saturday)." };
+    const hr = hrOf(u);
+    const left = (type === "sick" ? hr.sick : hr.annual) - leaveUsed(u.id, type, from.slice(0, 4));
+    return { days, left };
+  }
+
+  function updateLeaveCount() {
+    const pending = leaveList().filter((l) => leaveStatus(l) === "pending" && (me.role === "owner" || l.userId !== me.id)).length;
+    $("#count-requests").textContent = pending || "";
+  }
+
+  /* ---------- HR tab (owner) ---------- */
+  function renderHR() {
+    const people = staff();
+    const today = todayKey();
+    const year = today.slice(0, 4);
+    const hist = store.getHistory();
+    const leave = leaveList();
+    $("#hr-empty").classList.toggle("hidden", people.length > 0);
+    $("#hr-content").classList.toggle("hidden", !people.length);
+    $("#hr-year").textContent = year;
+
+    // 1. Logins today
+    $("#hr-today tbody").innerHTML = people
+      .map((u) => {
+        const mine = hist.filter((h) => h.area === "Login" && h.byId === u.id && dayKey(h.at) === today).reverse();
+        const ins = mine.filter((h) => h.action === "Logged in");
+        const outs = mine.filter((h) => h.action === "Logged out");
+        const onLeave = leave.find((l) => l.userId === u.id && leaveStatus(l) === "approved" && l.from <= today && l.to >= today);
+        const state = onLeave
+          ? `<span class="status">${typeName(onLeave.type)}</span>`
+          : ins.length ? `<span class="status paid">Logged in today</span>` : `<span class="status cancelled">Not logged in yet</span>`;
+        return `<tr>
+          <td><strong>${esc(u.name)}</strong><small>${esc(hrOf(u).job || "")}</small></td>
+          <td>${state}</td>
+          <td>${ins.length ? timeOnly(ins[0].at) : "—"}</td>
+          <td>${ins.length ? timeOnly(ins[ins.length - 1].at) : "—"}</td>
+          <td>${outs.length ? timeOnly(outs[outs.length - 1].at) : "—"}</td>
+          <td>${ins.length}</td>
+        </tr>`;
+      })
+      .join("");
+
+    // 2. Job, salary and leave balances
+    $("#hr-staff tbody").innerHTML = people
+      .map((u) => {
+        const hr = hrOf(u);
+        const aUsed = leaveUsed(u.id, "annual", year);
+        const sUsed = leaveUsed(u.id, "sick", year);
+        const aWait = leaveDays(u.id, "annual", year, "pending");
+        const sWait = leaveDays(u.id, "sick", year, "pending");
+        return `<tr data-id="${esc(u.id)}">
+          <td><strong>${esc(u.name)}</strong><small>@${esc(u.username)}${u.active ? "" : " · switched off"}</small></td>
+          <td>${esc(hr.job || "—")}${hr.startDate ? `<small>Since ${esc(hr.startDate)}</small>` : ""}</td>
+          <td><strong>${kwd(hr.salary)}</strong><small>per month</small></td>
+          <td><strong class="${hr.annual - aUsed <= 0 ? "neg" : ""}">${hr.annual - aUsed}</strong> of ${hr.annual} left<small>${aUsed} used${aWait ? ` · ${aWait} waiting` : ""}</small></td>
+          <td><strong class="${hr.sick - sUsed <= 0 ? "neg" : ""}">${hr.sick - sUsed}</strong> of ${hr.sick} left<small>${sUsed} used${sWait ? ` · ${sWait} waiting` : ""}</small></td>
+          <td style="white-space:nowrap"><button class="link-btn hr-edit">Edit job &amp; salary</button><button class="link-btn hr-leave">Add leave</button></td>
+        </tr>`;
+      })
+      .join("");
+
+    // 3. All leave (requests and leave added by the owner)
+    $("#hr-leave-empty").classList.toggle("hidden", leave.length > 0);
+    $("#hr-leave tbody").innerHTML = leave.map((l) => leaveRow(l, { who: true, cancel: true })).join("");
+
+    renderPayroll();
+  }
+
+  function leaveRow(l, opts) {
+    const names = new Map(store.getUsers().map((u) => [u.id, u.name]));
+    const st = leaveStatus(l);
+    const decision =
+      st === "approved" && l.decidedBy ? `<small>by ${esc(l.decidedBy)}, ${fmtDate(l.decidedAt)}</small>`
+      : st === "rejected" ? `<small>by ${esc(l.decidedBy)}, ${fmtDate(l.decidedAt)}${l.rejectReason ? ` · ${esc(l.rejectReason)}` : ""}</small>`
+      : st === "cancelled" ? `<small>by ${esc(l.cancelledBy || "")}${l.cancelReason ? ` · ${esc(l.cancelReason)}` : ""}</small>`
+      : "";
+    return `<tr data-id="${esc(l.id)}" class="${st === "cancelled" || st === "rejected" ? "row-off" : ""}">
+      ${opts.who ? `<td>${esc(names.get(l.userId) || "?")}</td>` : ""}
+      <td>${typeName(l.type)}</td>
+      <td style="white-space:nowrap">${esc(l.from)} → ${esc(l.to)}</td>
+      <td>${l.days}</td>
+      <td>${esc(l.note || "")}</td>
+      <td><small>${fmtDate(l.createdAt)}${l.requested ? " (request)" : ` by ${esc(l.by)}`}</small></td>
+      <td><span class="status ${STATUS_CLASS[st]}">${STATUS_LABEL[st]}</span>${decision}</td>
+      ${opts.cancel ? `<td>${st === "approved" ? `<button class="link-btn hr-cancel-leave">Cancel leave</button>` : ""}</td>` : ""}
+    </tr>`;
+  }
+
+  /* ---------- Payroll (monthly salary) ---------- */
+  function payrollRows(month) {
+    const saved = readList(HR_KEYS.payroll, {});
+    return staff()
+      .filter((u) => u.active || saved[`${month}|${u.id}`])
+      .map((u) => {
+        const hr = hrOf(u);
+        const rec = saved[`${month}|${u.id}`] || {};
+        const base = rec.paid ? rec.base : hr.salary;
+        const bonus = Number(rec.bonus) || 0;
+        const deduction = Number(rec.deduction) || 0;
+        return { u, hr, rec, base, bonus, deduction, net: base + bonus - deduction };
+      });
+  }
+
+  function renderPayroll() {
+    const month = $("#pay-month").value || thisMonth();
+    $("#pay-month").value = month;
+    const rows = payrollRows(month);
+    $("#hr-payroll tbody").innerHTML = rows
+      .map(
+        (r) => `<tr data-id="${esc(r.u.id)}">
+          <td><strong>${esc(r.u.name)}</strong><small>${esc(r.hr.job || "")}</small></td>
+          <td>${kwd(r.base)}</td>
+          <td><input class="pay-in" data-k="bonus" type="number" min="0" step="0.5" value="${r.bonus || ""}" placeholder="0" ${r.rec.paid ? "disabled" : ""}></td>
+          <td><input class="pay-in" data-k="deduction" type="number" min="0" step="0.5" value="${r.deduction || ""}" placeholder="0" ${r.rec.paid ? "disabled" : ""}></td>
+          <td><input class="pay-in wide" data-k="note" value="${esc(r.rec.note || "")}" placeholder="Why bonus / deduction" ${r.rec.paid ? "disabled" : ""}></td>
+          <td><strong>${kwd(r.net)}</strong></td>
+          <td>${r.rec.paid ? `<span class="status paid">Paid</span><small>${fmtDate(r.rec.paidAt)} by ${esc(r.rec.paidBy)}</small>` : `<button class="btn btn-primary btn-sm pay-mark">Mark paid</button>`}</td>
+        </tr>`
+      )
+      .join("");
+    const total = rows.reduce((n, r) => n + r.net, 0);
+    const unpaid = rows.filter((r) => !r.rec.paid).reduce((n, r) => n + r.net, 0);
+    $("#pay-total").textContent = rows.length ? `Total ${kwd(total)} · still to pay ${kwd(unpaid)}` : "No active employees.";
+  }
+
+  function savePayroll(month, userId, changes, logEntry) {
+    const saved = readList(HR_KEYS.payroll, {});
+    const key = `${month}|${userId}`;
+    saved[key] = Object.assign(saved[key] || {}, changes);
+    if (writeList(HR_KEYS.payroll, saved) && logEntry) store.log(Object.assign({ area: "HR" }, logEntry));
+  }
+
+  $("#pay-month").addEventListener("change", renderPayroll);
+
+  $("#hr-payroll").addEventListener("change", (e) => {
+    if (!e.target.matches(".pay-in") || !guard("owner")) return;
+    const id = e.target.closest("tr").dataset.id;
+    const month = $("#pay-month").value;
+    const k = e.target.dataset.k;
+    const before = (readList(HR_KEYS.payroll, {})[`${month}|${id}`] || {})[k];
+    const u = findUser(id);
+    if (k === "note") {
+      const val = e.target.value.trim();
+      savePayroll(month, id, { note: val }, { target: u.username, action: `Payroll ${month}: note for ${u.name}`, from: before || "", to: val });
+    } else {
+      const val = Math.max(0, Number(e.target.value) || 0);
+      savePayroll(month, id, { [k]: val }, {
+        target: u.username,
+        action: `Payroll ${month}: ${k === "bonus" ? "Bonus" : "Deduction"} for ${u.name}`,
+        from: before === undefined ? "" : kwd(before),
+        to: kwd(val)
+      });
+    }
+    renderPayroll();
+  });
+
+  $("#hr-payroll").addEventListener("click", (e) => {
+    if (!e.target.matches(".pay-mark") || !guard("owner")) return;
+    const id = e.target.closest("tr").dataset.id;
+    const month = $("#pay-month").value;
+    const r = payrollRows(month).find((x) => x.u.id === id);
+    if (!confirm(`Mark ${kwd(r.net)} as paid to ${r.u.name} for ${month}? After this the amounts are locked.`)) return;
+    savePayroll(month, id, { paid: true, paidAt: nowIso(), paidBy: me.name, base: r.base, net: r.net }, {
+      target: r.u.username,
+      action: `Payroll ${month}: paid ${r.u.name}`,
+      from: "Not paid",
+      to: `Paid ${kwd(r.net)} (salary ${kwd(r.base)}, bonus ${kwd(r.bonus)}, deduction ${kwd(r.deduction)})`
+    });
+    renderPayroll();
+  });
+
+  $("#pay-excel").addEventListener("click", async (e) => {
+    if (!guard("owner")) return;
+    const month = $("#pay-month").value;
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const year = month.slice(0, 4);
+      await window.TTExcel.payroll(month, payrollRows(month).map((r) => ({
+        name: r.u.name, job: r.hr.job, salary: r.base, bonus: r.bonus, deduction: r.deduction, note: r.rec.note || "", net: r.net,
+        status: r.rec.paid ? "Paid" : "Not paid", paidAt: r.rec.paidAt || null, paidBy: r.rec.paidBy || "",
+        annualLeft: r.hr.annual - leaveUsed(r.u.id, "annual", year), sickLeft: r.hr.sick - leaveUsed(r.u.id, "sick", year)
+      })), me.name);
+      store.log({ area: "HR", target: "Excel", action: `Downloaded payroll ${month}` });
+    } catch (err) {
+      alert(err.message || "Could not make the Excel file.");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Small pop-up forms
+  function hrDialog(html, onSubmit, after) {
+    const dlg = document.createElement("dialog");
+    dlg.className = "dash-dialog";
+    dlg.innerHTML = `<form class="pw-form" novalidate>${html}
+      <p class="form-error hidden" id="hr-error" role="alert"></p>
+      <div class="cancel-actions"><button class="btn btn-primary btn-sm" type="submit">Save</button><button class="link-btn hr-close" type="button">Close</button></div></form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener("close", () => dlg.remove());
+    $(".hr-close", dlg).addEventListener("click", () => dlg.close());
+    $("form", dlg).addEventListener("submit", (e) => {
+      e.preventDefault();
+      const problem = onSubmit(dlg);
+      if (problem) {
+        $("#hr-error", dlg).textContent = problem;
+        $("#hr-error", dlg).classList.remove("hidden");
+      } else {
+        dlg.close();
+        (after || renderHR)();
+        updateLeaveCount();
+      }
+    });
+    dlg.showModal();
+    return dlg;
+  }
+
+  $("#hr-staff").addEventListener("click", (e) => {
+    const row = e.target.closest("tr");
+    if (!row || !(e.target.matches(".hr-edit") || e.target.matches(".hr-leave")) || !guard("owner")) return;
+    const u = findUser(row.dataset.id);
+    const hr = hrOf(u);
+    if (e.target.matches(".hr-edit")) {
+      hrDialog(
+        `<h2>Job and salary: ${esc(u.name)}</h2>
+        <div class="field"><label for="hr-job">Job title</label><input id="hr-job" value="${esc(hr.job)}" placeholder="e.g. Camp counselor"></div>
+        <div class="field"><label for="hr-start">Start date</label><input id="hr-start" type="date" value="${esc(hr.startDate)}"></div>
+        <div class="field"><label for="hr-salary">Monthly salary (KWD)</label><input id="hr-salary" type="number" min="0" step="0.5" value="${hr.salary}"></div>
+        <div class="field"><label for="hr-annual">Annual leave days per year</label><input id="hr-annual" type="number" min="0" step="1" value="${hr.annual}"></div>
+        <div class="field"><label for="hr-sick">Sick leave days per year</label><input id="hr-sick" type="number" min="0" step="1" value="${hr.sick}"></div>`,
+        (dlg) => {
+          const next = {
+            job: $("#hr-job", dlg).value.trim(),
+            startDate: $("#hr-start", dlg).value,
+            salary: Math.max(0, Number($("#hr-salary", dlg).value) || 0),
+            annual: Math.max(0, parseInt($("#hr-annual", dlg).value, 10) || 0),
+            sick: Math.max(0, parseInt($("#hr-sick", dlg).value, 10) || 0)
+          };
+          const labels = { job: "Job title", startDate: "Start date", salary: "Monthly salary", annual: "Annual leave days", sick: "Sick leave days" };
+          const show = (k, v) => (k === "salary" ? kwd(v) : String(v ?? ""));
+          Object.keys(next).forEach((k) => {
+            if (String(hr[k]) !== String(next[k])) store.log({ area: "HR", target: u.username, action: `${labels[k]} for ${u.name}`, from: show(k, hr[k]), to: show(k, next[k]) });
+          });
+          const users = store.getUsers();
+          users.find((x) => x.id === u.id).hr = next;
+          store.saveUsers(users);
+          return "";
+        }
+      );
+    } else {
+      const today = todayKey();
+      hrDialog(
+        `<h2>Add leave: ${esc(u.name)}</h2>
+        <div class="field"><label for="lv-type">Type</label><select id="lv-type"><option value="annual">Annual leave (days off)</option><option value="sick">Sick leave</option></select></div>
+        <div class="field"><label for="lv-from">From</label><input id="lv-from" type="date" value="${today}"></div>
+        <div class="field"><label for="lv-to">To (same day for one day)</label><input id="lv-to" type="date" value="${today}"></div>
+        <div class="field"><label for="lv-note">Note</label><input id="lv-note" placeholder="e.g. doctor's note received"></div>
+        <p class="hint">Saved as approved. Only Sunday to Thursday are counted.</p>`,
+        (dlg) => {
+          const type = $("#lv-type", dlg).value;
+          const from = $("#lv-from", dlg).value;
+          const to = $("#lv-to", dlg).value;
+          const c = checkLeave(u, type, from, to);
+          if (c.problem) return c.problem;
+          if (c.days > c.left && !confirm(`${u.name} has only ${c.left} ${type === "sick" ? "sick" : "annual"} leave days left, and this is ${c.days}. Save anyway?`)) return "Not saved.";
+          const list = leaveList();
+          const rec = { id: store.makeId("LV"), userId: u.id, type, from, to, days: c.days, note: $("#lv-note", dlg).value.trim(), createdAt: nowIso(), by: me.name, status: "approved", decidedBy: me.name, decidedAt: nowIso() };
+          list.unshift(rec);
+          writeList(HR_KEYS.leave, list);
+          store.log({ area: "HR", target: u.username, action: `${typeName(type)} added for ${u.name}`, to: `${from} → ${to} (${c.days} days)${rec.note ? ` · ${rec.note}` : ""}` });
+          return "";
+        }
+      );
+    }
+  });
+
+  $("#hr-leave").addEventListener("click", (e) => {
+    if (!e.target.matches(".hr-cancel-leave") || !guard("owner")) return;
+    const id = e.target.closest("tr").dataset.id;
+    const reason = prompt("Why is this leave being cancelled?");
+    if (reason === null) return;
+    if (!reason.trim()) return alert("Please write a reason.");
+    const list = leaveList();
+    const l = list.find((x) => x.id === id);
+    Object.assign(l, { cancelled: true, cancelReason: reason.trim(), cancelledAt: nowIso(), cancelledBy: me.name });
+    writeList(HR_KEYS.leave, list);
+    const u = findUser(l.userId);
+    store.log({ area: "HR", target: u ? u.username : l.userId, action: `Leave cancelled for ${u ? u.name : "?"}. Reason: ${reason.trim()}`, from: `${typeName(l.type)} ${l.from} → ${l.to} (${l.days} days)`, to: "Cancelled" });
+    renderHR();
+  });
+
+  /* ---------- My leave (every employee) ---------- */
+  function renderMyLeave() {
+    const year = todayKey().slice(0, 4);
+    const hr = hrOf(me);
+    const aUsed = leaveUsed(me.id, "annual", year);
+    const sUsed = leaveUsed(me.id, "sick", year);
+    const aWait = leaveDays(me.id, "annual", year, "pending");
+    const sWait = leaveDays(me.id, "sick", year, "pending");
+    $("#my-balances").innerHTML = `
+      <div class="stat"><small>Annual leave left (${year})</small><strong>${hr.annual - aUsed} of ${hr.annual}</strong>${aWait ? `<span class="hint">${aWait} days waiting for approval</span>` : ""}</div>
+      <div class="stat"><small>Sick leave left (${year})</small><strong>${hr.sick - sUsed} of ${hr.sick}</strong>${sWait ? `<span class="hint">${sWait} days waiting for approval</span>` : ""}</div>`;
+    const mine = leaveList().filter((l) => l.userId === me.id);
+    $("#my-leave-empty").classList.toggle("hidden", mine.length > 0);
+    $("#my-leave tbody").innerHTML = mine.map((l) => leaveRow(l, {})).join("");
+    if (!$("#rq-from").value) $("#rq-from").value = todayKey();
+    if (!$("#rq-to").value) $("#rq-to").value = todayKey();
+  }
+
+  $("#request-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!refreshMe()) return;
+    const type = $("#rq-type").value;
+    const from = $("#rq-from").value;
+    const to = $("#rq-to").value;
+    const note = $("#rq-note").value.trim();
+    const c = checkLeave(me, type, from, to);
+    if (c.problem) return formError("#request-error", c.problem);
+    const overlap = leaveList().some((l) => l.userId === me.id && ["pending", "approved"].includes(leaveStatus(l)) && l.from <= to && l.to >= from);
+    if (overlap) return formError("#request-error", "You already have leave or a request on some of these days.");
+    if (c.days > c.left && !confirm(`You have ${c.left} ${type === "sick" ? "sick" : "annual"} leave days left, and this request is ${c.days} days. Send anyway?`)) return;
+    formError("#request-error", "");
+    const list = leaveList();
+    list.unshift({ id: store.makeId("LV"), userId: me.id, type, from, to, days: c.days, note, createdAt: nowIso(), by: me.name, requested: true, status: "pending" });
+    writeList(HR_KEYS.leave, list);
+    store.log({ area: "HR", target: me.username, action: `${typeName(type)} requested by ${me.name}`, to: `${from} → ${to} (${c.days} days)${note ? ` · ${note}` : ""}` });
+    $("#rq-note").value = "";
+    $("#request-sent").classList.remove("hidden");
+    setTimeout(() => $("#request-sent").classList.add("hidden"), 4000);
+    renderMyLeave();
+    updateLeaveCount();
+  });
+
+  /* ---------- Leave requests (owner and approvers) ---------- */
+  function renderRequests() {
+    const list = leaveList().filter((l) => l.requested);
+    const pending = list.filter((l) => leaveStatus(l) === "pending");
+    const decided = list.filter((l) => leaveStatus(l) !== "pending").slice(0, 50);
+    const year = todayKey().slice(0, 4);
+    $("#requests-empty").classList.toggle("hidden", pending.length > 0);
+    $("#requests-list").innerHTML = pending
+      .map((l) => {
+        const u = findUser(l.userId) || { name: "?", id: "" };
+        const hr = hrOf(u);
+        const left = (l.type === "sick" ? hr.sick : hr.annual) - leaveUsed(u.id, l.type, year);
+        const own = u.id === me.id && me.role !== "owner";
+        return `<article class="message request-card unread" data-id="${esc(l.id)}">
+          <div class="message-head">
+            <strong>${esc(u.name)} · ${typeName(l.type)}</strong>
+            <small>Asked ${fmtDate(l.createdAt)}</small>
+          </div>
+          <p><strong>${esc(l.from)} → ${esc(l.to)}</strong> · ${l.days} working ${l.days === 1 ? "day" : "days"}${l.note ? `<br>${esc(l.note)}` : ""}</p>
+          <small class="${l.days > left ? "neg" : ""}">${u.name} has ${left} ${l.type === "sick" ? "sick" : "annual"} leave days left${l.days > left ? ", fewer than asked" : ""}.</small>
+          <div class="message-actions">
+            ${own
+              ? `<em>You can't approve your own request.</em>`
+              : `<button class="btn btn-primary btn-sm rq-approve">Approve</button>
+                 <button class="btn btn-secondary btn-sm rq-reject">Reject</button>`}
+          </div>
+          <div class="reject-box hidden">
+            <label for="rj-${esc(l.id)}">Reason for rejecting (optional)</label>
+            <textarea id="rj-${esc(l.id)}" rows="2" placeholder="e.g. too many people off that week"></textarea>
+            <div class="cancel-actions"><button class="btn btn-primary btn-sm rq-reject-confirm">Reject request</button><button class="link-btn rq-reject-close">Back</button></div>
+          </div>
+        </article>`;
+      })
+      .join("");
+    $("#requests-done-empty").classList.toggle("hidden", decided.length > 0);
+    $("#requests-done tbody").innerHTML = decided.map((l) => leaveRow(l, { who: true })).join("");
+  }
+
+  $("#requests-list").addEventListener("click", (e) => {
+    const card = e.target.closest(".request-card");
+    if (!card) return;
+    if (e.target.matches(".rq-reject")) return $(".reject-box", card).classList.remove("hidden");
+    if (e.target.matches(".rq-reject-close")) return $(".reject-box", card).classList.add("hidden");
+    const approve = e.target.matches(".rq-approve");
+    const reject = e.target.matches(".rq-reject-confirm");
+    if (!approve && !reject) return;
+    if (!guard("hr.approve")) return;
+    const list = leaveList();
+    const l = list.find((x) => x.id === card.dataset.id);
+    if (!l || leaveStatus(l) !== "pending") return renderRequests();
+    if (l.userId === me.id && me.role !== "owner") return alert("You can't approve your own request.");
+    const u = findUser(l.userId) || { name: "?", username: l.userId };
+    const reason = reject ? $("textarea", card).value.trim() : "";
+    Object.assign(l, { status: approve ? "approved" : "rejected", decidedBy: me.name, decidedAt: nowIso(), rejectReason: reason });
+    writeList(HR_KEYS.leave, list);
+    store.log({
+      area: "HR",
+      target: u.username,
+      action: `${typeName(l.type)} request ${approve ? "approved" : "rejected"} for ${u.name}${reason ? `. Reason: ${reason}` : ""}`,
+      from: "Waiting for approval",
+      to: `${approve ? "Approved" : "Rejected"}: ${l.from} → ${l.to} (${l.days} days)`
+    });
+    renderRequests();
+    updateLeaveCount();
   });
 
   /* ==========================================================

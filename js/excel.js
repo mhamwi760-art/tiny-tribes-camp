@@ -292,5 +292,50 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   }
 
-  window.TTExcel = { download };
+  // Payroll for one month: one row per employee, with a total row
+  async function payroll(month, rows, by) {
+    await loadLib();
+    const wb = new window.ExcelJS.Workbook();
+    wb.creator = "Tiny Tribes dashboard";
+    wb.created = new Date();
+    const ws = addTable(
+      wb,
+      `Payroll ${month}`,
+      [
+        { header: "Employee", key: "name", width: 24 },
+        { header: "Job", key: "job", width: 20 },
+        { header: "Monthly salary", key: "salary", width: 16, money: "KWD" },
+        { header: "Bonus", key: "bonus", width: 14, money: "KWD" },
+        { header: "Deduction", key: "deduction", width: 14, money: "KWD" },
+        { header: "Net to pay", key: "net", width: 16, money: "KWD" },
+        { header: "Note", key: "note", width: 30, wrap: true },
+        { header: "Status", key: "status", width: 11 },
+        { header: "Paid on", key: "paidAt", width: 19, date: true },
+        { header: "Paid by", key: "paidBy", width: 16 },
+        { header: "Annual leave left", key: "annualLeft", width: 16 },
+        { header: "Sick leave left", key: "sickLeft", width: 14 }
+      ],
+      rows.map((r) => Object.assign({}, r, { paidAt: asDate(r.paidAt) }))
+    );
+    colourRows(ws, rows, (r) => (r.status === "Paid" ? GREEN : PINK));
+    if (rows.length) {
+      const n = rows.length + 1;
+      const total = ws.addRow({ name: "TOTAL", salary: { formula: `SUM(C2:C${n})` }, bonus: { formula: `SUM(D2:D${n})` }, deduction: { formula: `SUM(E2:E${n})` }, net: { formula: `SUM(F2:F${n})` } });
+      total.font = { bold: true };
+      total.eachCell({ includeEmpty: true }, (c) => (c.border = { top: { style: "medium" } }));
+    }
+    ws.addRow([]);
+    ws.addRow([`Downloaded ${new Date().toLocaleString("en-GB")} by ${by}`]).font = { italic: true, color: { argb: "FF666666" } };
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    a.download = `tiny-tribes-payroll-${month}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+
+  window.TTExcel = { download, payroll };
 })();

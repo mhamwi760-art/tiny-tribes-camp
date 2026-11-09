@@ -296,3 +296,20 @@ ins { color: #1d6b31; background: #e3f4e6; text-decoration: none; padding: 0 .2e
 /* Hidden photos */
 .sub-head { margin: 2rem 0 0; }
 .dash-photo.is-hidden img { filter: grayscale(1); opacity: .6; }
+
+/* HR */
+.card-title { padding: 1.2rem 1.2rem .4rem; margin: 0; }
+.card-title h2 { margin: 0; }
+.card-title small { color: var(--muted); font-weight: 600; font-size: .85rem; }
+.filter-foot.pad { padding: 0 1.2rem 1rem; }
+.pay-in { width: 90px; font: inherit; padding: .3rem .4rem; border-radius: 8px; border: 1px solid var(--line); }
+.neg { color: var(--red); }
+.row-off td { opacity: .55; }
+#hr-staff td small, #hr-payroll td small, #hr-today td small, #hr-leave td small { display: block; color: var(--muted); }
+.pay-in.wide { width: 170px; }
+.stats.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stat .hint { display: block; margin-top: .3rem; font-size: .8rem; }
+.request-card { border-left-color: var(--orange); }
+.reject-box { display: grid; gap: .4rem; margin-top: .8rem; max-width: 520px; }
+.reject-box textarea { font: inherit; padding: .5rem .7rem; border-radius: 10px; border: 1px solid var(--line); }
+#request-sent { margin-left: .8rem; }
