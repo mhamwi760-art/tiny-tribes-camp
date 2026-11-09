@@ -8,10 +8,10 @@
   <link rel="icon" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/style.css?v=16">
-  <link rel="stylesheet" href="css/dashboard.css?v=17">
+  <link rel="stylesheet" href="css/dashboard.css?v=18">
   <script src="js/data.js?v=16" defer></script>
   <script src="js/store.js?v=16" defer></script>
-  <script src="js/dashboard.js?v=17" defer></script>
+  <script src="js/dashboard.js?v=18" defer></script>
 </head>
 <body class="dash">
   <header class="dash-top">
@@ -28,6 +28,7 @@
     <nav class="dash-nav" aria-label="Dashboard sections">
       <button data-tab="overview" aria-pressed="true">Overview</button>
       <button data-tab="orders">Orders <span class="count" id="count-orders"></span></button>
+      <button data-tab="cancelled">Cancelled <span class="count" id="count-cancelled"></span></button>
       <button data-tab="messages">Messages <span class="count" id="count-messages"></span></button>
       <button data-tab="programs">Programs &amp; prices</button>
       <button data-tab="photos">Photos</button>
@@ -87,6 +88,28 @@
           <p class="empty hidden" id="orders-empty">No orders yet. They appear here when a parent registers on the site, or use <strong>+ Create test order</strong> to try it out.</p>
           <p class="empty hidden" id="orders-nomatch">No orders match your search or filters.</p>
         </div>
+      </section>
+
+      <!-- Cancelled orders -->
+      <section class="tab hidden" id="tab-cancelled">
+        <div class="tab-head">
+          <h1>Cancelled orders</h1>
+          <button class="btn btn-secondary btn-sm" id="export-cancelled">Download CSV</button>
+        </div>
+        <div class="dash-card filters" id="cancel-filters">
+          <div class="filter-grid cancel-grid">
+            <div class="field search-field"><label for="c-search">Search</label>
+              <input type="search" id="c-search" placeholder="Name, order number, phone, reason…" autocomplete="off">
+            </div>
+            <div class="field"><label for="c-refund">Refund</label>
+              <select id="c-refund"><option value="">All</option><option value="no">Not refunded</option><option value="yes">Refunded</option></select>
+            </div>
+          </div>
+          <div class="filter-foot"><span id="cancelled-shown" role="status"></span></div>
+        </div>
+        <div id="cancelled-list"></div>
+        <p class="empty hidden" id="cancelled-empty">No cancelled orders. To cancel an order, press <strong>Cancel</strong> next to it in Orders.</p>
+        <p class="empty hidden" id="cancelled-nomatch">No cancelled orders match your search.</p>
       </section>
 
       <!-- Messages -->

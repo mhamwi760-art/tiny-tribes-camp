@@ -16,7 +16,12 @@
   const fmtDate = (iso) =>
     new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
-  const STATUSES = ["Awaiting payment", "Paid", "Paid (demo)", "Cancelled"];
+  // Cancelling has its own button (with a reason), so it is not in the status list
+  const STATUSES = ["Awaiting payment", "Paid", "Paid (demo)"];
+  const isCancelled = (o) => o.status === "Cancelled";
+  const activeOrders = () => store.getOrders().filter((o) => !isCancelled(o));
+  const cancelledOrders = () =>
+    store.getOrders().filter(isCancelled).sort((a, b) => String(b.cancelledAt || b.createdAt).localeCompare(String(a.cancelledAt || a.createdAt)));
   const statusClass = (s) => (s.startsWith("Paid") ? "paid" : s === "Cancelled" ? "cancelled" : "");
   const phoneDigits = (p) => String(p || "").replace(/[^\d]/g, "");
 
@@ -35,19 +40,22 @@
 
   function render(name) {
     updateCounts();
-    ({ overview: renderOverview, orders: renderOrders, messages: renderMessages, programs: renderPrograms, photos: renderPhotos })[name]();
+    ({ overview: renderOverview, orders: renderOrders, cancelled: renderCancelled, messages: renderMessages, programs: renderPrograms, photos: renderPhotos })[name]();
   }
 
   function updateCounts() {
     const pending = store.getOrders().filter((o) => o.status === "Awaiting payment").length;
     const unread = store.getMessages().filter((m) => !m.read).length;
+    const toRefund = cancelledOrders().filter((o) => !o.refunded).length;
     $("#count-orders").textContent = pending || "";
+    $("#count-cancelled").textContent = toRefund || "";
+    $("#count-cancelled").title = toRefund ? `${toRefund} not refunded` : "";
     $("#count-messages").textContent = unread || "";
   }
 
   /* ---------- Overview ---------- */
   function renderOverview() {
-    const orders = store.getOrders();
+    const orders = activeOrders();
     const messages = store.getMessages();
     const paid = orders.filter((o) => o.status.startsWith("Paid"));
     const children = paid.reduce((n, o) => n + o.children.length, 0);
@@ -135,7 +143,7 @@
 
   function renderOrders() {
     content = store.getContent();
-    const all = store.getOrders();
+    const all = activeOrders();
     fillFilters(all);
     const orders = filteredOrders(all);
     const tbody = $("#orders-table tbody");
@@ -154,7 +162,20 @@
         <td>${o.children.length}</td>
         <td><strong>${money(o.total)}</strong></td>
         <td><select class="order-status" aria-label="Order status">${[...new Set([...STATUSES, o.status])].map((s) => `<option ${s === o.status ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></td>
-        <td style="white-space:nowrap"><button class="link-btn toggle-details">Details</button><button class="link-btn delete-order">Delete</button></td>
+        <td style="white-space:nowrap"><button class="link-btn toggle-details">Details</button><button class="link-btn cancel-order">Cancel</button><button class="link-btn delete-order">Delete</button></td>
+      </tr>
+      <tr class="cancel-bar hidden" data-cancel="${esc(o.id)}">
+        <td colspan="8">
+          <form class="cancel-form">
+            <label for="reason-${esc(o.id)}">Why is order <strong>${esc(o.id)}</strong> (${esc(o.parent.name)}) being cancelled?</label>
+            <textarea id="reason-${esc(o.id)}" class="cancel-reason" rows="2" placeholder="For example: child is sick, family travelling, asked by phone…"></textarea>
+            <span class="error cancel-error hidden">Please write the reason.</span>
+            <div class="cancel-actions">
+              <button type="submit" class="btn btn-primary btn-sm">Cancel order</button>
+              <button type="button" class="link-btn keep-order">Keep order</button>
+            </div>
+          </form>
+        </td>
       </tr>
       <tr class="details hidden" data-for="${esc(o.id)}">
         <td colspan="8">
@@ -251,6 +272,16 @@
     if (e.target.matches(".toggle-details")) {
       $(`tr[data-for="${row.dataset.id}"]`).classList.toggle("hidden");
     }
+    if (e.target.matches(".cancel-order")) {
+      const bar = $(`tr[data-cancel="${row.dataset.id}"]`);
+      bar.classList.toggle("hidden");
+      if (!bar.classList.contains("hidden")) $(".cancel-reason", bar).focus();
+    }
+    if (e.target.matches(".keep-order")) {
+      row.classList.add("hidden");
+      $(".cancel-reason", row).value = "";
+      $(".cancel-error", row).classList.add("hidden");
+    }
     if (e.target.matches(".delete-order") && confirm("Delete this order? This cannot be undone.")) {
       store.deleteOrder(row.dataset.id);
       renderOrders();
@@ -258,10 +289,129 @@
     }
   });
 
+  $("#orders-table").addEventListener("submit", (e) => {
+    if (!e.target.matches(".cancel-form")) return;
+    e.preventDefault();
+    const bar = e.target.closest("tr");
+    const reason = $(".cancel-reason", bar).value.trim();
+    $(".cancel-error", bar).classList.toggle("hidden", !!reason);
+    if (!reason) {
+      $(".cancel-reason", bar).focus();
+      return;
+    }
+    const id = bar.dataset.cancel;
+    const order = store.getOrders().find((o) => o.id === id);
+    store.updateOrder(id, {
+      status: "Cancelled",
+      statusBeforeCancel: order.status,
+      cancelReason: reason,
+      cancelledAt: new Date().toISOString(),
+      refunded: false
+    });
+    renderOrders();
+    updateCounts();
+  });
+
+  /* ---------- Cancelled orders ---------- */
+  function filteredCancelled() {
+    const words = norm($("#c-search").value).split(/\s+/).filter(Boolean);
+    const refund = $("#c-refund").value;
+    return cancelledOrders().filter((o) => {
+      if (refund === "yes" && !o.refunded) return false;
+      if (refund === "no" && o.refunded) return false;
+      if (words.length) {
+        const text = orderText(o) + " " + norm(o.cancelReason);
+        if (!words.every((w) => text.includes(w))) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderCancelled() {
+    content = store.getContent();
+    const all = cancelledOrders();
+    const list = filteredCancelled();
+    $("#cancelled-empty").classList.toggle("hidden", all.length > 0);
+    $("#cancelled-nomatch").classList.toggle("hidden", !all.length || list.length > 0);
+    const notRefunded = list.filter((o) => !o.refunded);
+    $("#cancelled-shown").textContent = all.length
+      ? `Showing ${list.length} of ${all.length} cancelled · ${notRefunded.length} not refunded (${money(notRefunded.reduce((n, o) => n + (Number(o.total) || 0), 0))})`
+      : "";
+    $("#cancelled-list").innerHTML = list
+      .map(
+        (o) => `
+      <article class="message cancelled-card ${o.refunded ? "refunded" : ""}" data-id="${esc(o.id)}">
+        <div class="message-head">
+          <strong>${esc(o.parent.name)} <code>${esc(o.id)}</code>${o.test ? `<span class="test-badge">Test</span>` : ""}</strong>
+          <small>Cancelled ${o.cancelledAt ? fmtDate(o.cancelledAt) : ""}</small>
+        </div>
+        <small>${esc(o.programName)} · ${esc(o.optionLabel)} · ${o.children.length} ${o.children.length === 1 ? "child" : "children"} · <strong>${money(o.total)}</strong>
+          ${o.statusBeforeCancel ? ` · Was: ${esc(o.statusBeforeCancel)}` : ""}${o.method ? ` (${esc(o.method)})` : ""}</small>
+        <p class="cancel-reason-text"><strong>Reason:</strong> ${o.cancelReason ? esc(o.cancelReason) : "<em>No reason written</em>"}</p>
+        <small>${esc(o.parent.phone)}${o.parent.email ? ` · ${esc(o.parent.email)}` : ""} · Children: ${o.children.map((c) => esc(c.name)).join(", ")}</small>
+        <div class="message-actions">
+          <label class="refund-pick">Refund:
+            <select class="refund-status" aria-label="Refund status for ${esc(o.id)}">
+              <option value="no" ${o.refunded ? "" : "selected"}>Not refunded</option>
+              <option value="yes" ${o.refunded ? "selected" : ""}>Refunded</option>
+            </select>
+          </label>
+          ${o.refunded && o.refundedAt ? `<small>on ${fmtDate(o.refundedAt)}</small>` : ""}
+          <button class="link-btn restore-order">Restore order</button>
+          <button class="link-btn delete-cancelled">Delete</button>
+        </div>
+      </article>`
+      )
+      .join("");
+  }
+
+  $("#c-search").addEventListener("input", renderCancelled);
+  $("#c-refund").addEventListener("change", renderCancelled);
+
+  $("#cancelled-list").addEventListener("change", (e) => {
+    if (!e.target.matches(".refund-status")) return;
+    const yes = e.target.value === "yes";
+    store.updateOrder(e.target.closest(".cancelled-card").dataset.id, { refunded: yes, refundedAt: yes ? new Date().toISOString() : null });
+    renderCancelled();
+    updateCounts();
+  });
+
+  $("#cancelled-list").addEventListener("click", (e) => {
+    const card = e.target.closest(".cancelled-card");
+    if (!card) return;
+    const id = card.dataset.id;
+    if (e.target.matches(".restore-order")) {
+      const o = store.getOrders().find((x) => x.id === id);
+      if (!confirm(`Restore order ${id}? It goes back to Orders as "${o.statusBeforeCancel || "Awaiting payment"}".`)) return;
+      store.updateOrder(id, { status: o.statusBeforeCancel || "Awaiting payment", restoredAt: new Date().toISOString() });
+    } else if (e.target.matches(".delete-cancelled")) {
+      if (!confirm("Delete this order? This cannot be undone.")) return;
+      store.deleteOrder(id);
+    } else return;
+    renderCancelled();
+    updateCounts();
+  });
+
+  $("#export-cancelled").addEventListener("click", () => {
+    const rows = [["Cancelled on", "Reference", "Test order", "Parent", "Phone", "Email", "Program", "Option", "Children", "Total", "Status before", "Reason", "Refunded", "Refunded on"]];
+    filteredCancelled().forEach((o) =>
+      rows.push([
+        o.cancelledAt, o.id, o.test ? "Yes" : "", o.parent.name, o.parent.phone, o.parent.email,
+        o.programName, o.optionLabel, o.children.map((c) => `${c.name} (${c.age})`).join("; "),
+        o.total, o.statusBeforeCancel, o.cancelReason, o.refunded ? "Yes" : "No", o.refundedAt
+      ])
+    );
+    const csv = rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" }));
+    a.download = `tiny-tribes-cancelled-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+  });
+
   // Downloads the orders you can see (search and filters apply)
   $("#export-orders").addEventListener("click", () => {
     const rows = [["Date", "Reference", "Test order", "Parent", "Phone", "Email", "Emergency", "Program", "Option", "Children", "Child names and ages", "Total", "Status"]];
-    filteredOrders(store.getOrders()).forEach((o) =>
+    filteredOrders(activeOrders()).forEach((o) =>
       rows.push([
         o.createdAt, o.id, o.test ? "Yes" : "", o.parent.name, o.parent.phone, o.parent.email, o.parent.emergency,
         o.programName, o.optionLabel, o.children.length,
@@ -504,5 +654,5 @@
 
   /* ---------- Start ---------- */
   const start = location.hash.slice(1);
-  showTab(["overview", "orders", "messages", "programs", "photos"].includes(start) ? start : "overview");
+  showTab(["overview", "orders", "cancelled", "messages", "programs", "photos"].includes(start) ? start : "overview");
 })();
