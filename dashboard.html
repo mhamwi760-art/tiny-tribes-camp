@@ -8,10 +8,11 @@
   <link rel="icon" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/style.css?v=19">
-  <link rel="stylesheet" href="css/dashboard.css?v=19">
+  <link rel="stylesheet" href="css/dashboard.css?v=20">
   <script src="js/data.js?v=19" defer></script>
   <script src="js/store.js?v=19" defer></script>
-  <script src="js/dashboard.js?v=19" defer></script>
+  <script src="js/excel.js?v=22" defer></script>
+  <script src="js/dashboard.js?v=20" defer></script>
 </head>
 <body class="dash locked">
   <header class="dash-top">
@@ -82,7 +83,7 @@
           <h1>Orders</h1>
           <div class="tab-actions">
             <button class="btn btn-primary btn-sm" id="add-test-order" data-need="orders.test">+ Create test order</button>
-            <button class="btn btn-secondary btn-sm" id="export-orders" data-need="orders.export">Download CSV</button>
+            <button class="btn btn-secondary btn-sm" id="export-orders" data-need="orders.export">Download Excel</button>
           </div>
         </div>
         <div class="dash-card filters" id="order-filters">
@@ -122,7 +123,7 @@
       <section class="tab hidden" id="tab-cancelled">
         <div class="tab-head">
           <h1>Cancelled orders</h1>
-          <button class="btn btn-secondary btn-sm" id="export-cancelled" data-need="orders.export">Download CSV</button>
+          <button class="btn btn-secondary btn-sm" id="export-cancelled" data-need="orders.export">Download Excel</button>
         </div>
         <div class="dash-card filters" id="cancel-filters">
           <div class="filter-grid cancel-grid">

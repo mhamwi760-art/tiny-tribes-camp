@@ -48,7 +48,7 @@
     ["orders.restore", "Restore cancelled orders"],
     ["orders.refund", "Mark orders refunded / not refunded"],
     ["orders.test", "Create test orders"],
-    ["orders.export", "Download CSV files"],
+    ["orders.export", "Download Excel files"],
     ["messages.view", "See messages"],
     ["messages.manage", "Mark messages read and archive them"],
     ["programs.edit", "Edit programs and prices"],
@@ -524,28 +524,44 @@
     updateCounts();
   });
 
-  // Downloads the orders you can see (search and filters apply)
-  function downloadCsv(name, rows) {
-    const csv = rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" }));
-    a.download = `tiny-tribes-${name}-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
+  // Words describing the search and filters, written on the Excel summary
+  function filterText(pairs) {
+    return pairs
+      .filter(([, el]) => el.value)
+      .map(([label, el]) => `${label}: ${el.tagName === "SELECT" ? el.options[el.selectedIndex].text : el.value}`)
+      .join(" · ");
   }
 
-  $("#export-orders").addEventListener("click", () => {
+  async function excelDownload(btn, kind, list, filters) {
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Preparing…";
+    try {
+      await window.TTExcel.download(kind, {
+        orders: list,
+        currency: content.currency,
+        filters,
+        by: me.name,
+        history: can("history.view") ? store.getHistory() : null,
+        fileName: `tiny-tribes-${kind}-${new Date().toISOString().slice(0, 10)}.xlsx`
+      });
+      store.log({ area: "Order", target: "Excel", action: `Downloaded ${kind === "cancelled" ? "cancelled orders" : "orders"} Excel file`, to: `${list.length} orders` });
+    } catch (err) {
+      alert(err.message || "Could not make the Excel file.");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  // Downloads the orders you can see (search and filters apply)
+  $("#export-orders").addEventListener("click", (e) => {
     if (!guard("orders.export")) return;
-    const rows = [["Date", "Reference", "Test order", "Parent", "Phone", "Email", "Emergency", "Program", "Option", "Children", "Child names and ages", "Total", "Status"]];
-    const list = filteredOrders(activeOrders());
-    list.forEach((o) =>
-      rows.push([
-        o.createdAt, o.id, o.test ? "Yes" : "", o.parent.name, o.parent.phone, o.parent.email, o.parent.emergency,
-        o.programName, o.optionLabel, o.children.length,
-        o.children.map((c) => `${c.name} (${c.age})`).join("; "), o.total, o.status
-      ])
-    );
-    downloadCsv("orders", rows);
-    store.log({ area: "Order", target: "CSV", action: "Downloaded orders CSV", to: `${list.length} orders` });
+    const filters = filterText([
+      ["Search", F("search")], ["Status", F("status")], ["Program", F("program")], ["Option", F("option")],
+      ["Child age", F("age")], ["From", F("from")], ["To", F("to")], ["Type", F("type")]
+    ]);
+    excelDownload(e.currentTarget, "orders", filteredOrders(activeOrders()), filters);
   });
 
   /* ==========================================================
@@ -643,19 +659,10 @@
     }
   });
 
-  $("#export-cancelled").addEventListener("click", () => {
+  $("#export-cancelled").addEventListener("click", (e) => {
     if (!guard("orders.export")) return;
-    const rows = [["Cancelled on", "Cancelled by", "Reference", "Test order", "Parent", "Phone", "Email", "Program", "Option", "Children", "Total", "Status before", "Reason", "Refunded", "Refunded on", "Refunded by"]];
-    const list = filteredCancelled();
-    list.forEach((o) =>
-      rows.push([
-        o.cancelledAt, o.cancelledBy, o.id, o.test ? "Yes" : "", o.parent.name, o.parent.phone, o.parent.email,
-        o.programName, o.optionLabel, o.children.map((c) => `${c.name} (${c.age})`).join("; "),
-        o.total, o.statusBeforeCancel, o.cancelReason, o.refunded ? "Yes" : "No", o.refundedAt, o.refundedBy
-      ])
-    );
-    downloadCsv("cancelled", rows);
-    store.log({ area: "Order", target: "CSV", action: "Downloaded cancelled orders CSV", to: `${list.length} orders` });
+    const filters = filterText([["Search", $("#c-search")], ["Refund", $("#c-refund")]]);
+    excelDownload(e.currentTarget, "cancelled", filteredCancelled(), filters);
   });
 
   /* ==========================================================
