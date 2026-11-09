@@ -161,21 +161,23 @@
     $$(".nav-group").forEach((g) => g.classList.toggle("hidden", !$$(".nav-items [data-tab]:not(.hidden)", g).length));
   }
 
-  /* Menu groups fold and unfold; the choice is remembered in this browser */
-  const NAV_KEY = "tt-nav-folded";
-  const folded = () => { try { return JSON.parse(localStorage.getItem(NAV_KEY)) || []; } catch (e) { return []; } };
+  /* Menu groups start folded and stay folded until someone opens them.
+     The groups a person opened are remembered in this browser. */
+  const NAV_KEY = "tt-nav-open";
+  const opened = () => { try { return JSON.parse(localStorage.getItem(NAV_KEY)) || []; } catch (e) { return []; } };
   function setFolded(group, fold) {
     const g = $(`.nav-group[data-group="${group}"]`);
     g.classList.toggle("folded", fold);
     $(".nav-head", g).setAttribute("aria-expanded", String(!fold));
-    const list = folded().filter((x) => x !== group);
-    if (fold) list.push(group);
+    const list = opened().filter((x) => x !== group);
+    if (!fold) list.push(group);
     try { localStorage.setItem(NAV_KEY, JSON.stringify(list)); } catch (e) { /* ignore */ }
     updateGroupCounts();
   }
-  folded().forEach((gname) => {
-    const g = $(`.nav-group[data-group="${gname}"]`);
-    if (g) { g.classList.add("folded"); $(".nav-head", g).setAttribute("aria-expanded", "false"); }
+  $$(".nav-group").forEach((g) => {
+    const open = opened().includes(g.dataset.group);
+    g.classList.toggle("folded", !open);
+    $(".nav-head", g).setAttribute("aria-expanded", String(open));
   });
 
   // A folded group shows the total of the numbers inside it
@@ -249,9 +251,8 @@
     const btn = $(`.dash-nav button[data-tab="${name}"]`);
     if (!btn || btn.classList.contains("hidden")) name = "overview";
     $$(".dash-nav [data-tab]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tab === name)));
-    // Open the group of the page being shown
-    const group = $(`.dash-nav [data-tab="${name}"]`).closest(".nav-group");
-    if (group && group.classList.contains("folded")) setFolded(group.dataset.group, false);
+    // Mark the group that holds the page being shown (it stays folded if it was folded)
+    $$(".nav-group").forEach((g) => g.classList.toggle("has-current", !!$(`[data-tab="${name}"]`, g)));
     $$(".tab").forEach((t) => t.classList.toggle("hidden", t.id !== `tab-${name}`));
     history.replaceState(null, "", `#${name}`);
     render(name);

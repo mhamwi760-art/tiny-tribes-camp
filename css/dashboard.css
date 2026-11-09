@@ -350,3 +350,4 @@ ins { color: #1d6b31; background: #e3f4e6; text-decoration: none; padding: 0 .2e
   .dash-nav { flex-direction: column; overflow-x: visible; }
   .dash-nav button { white-space: normal; }
 }
+.nav-group.folded.has-current .nav-head { color: var(--red); background: #fff6f3; }
