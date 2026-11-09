@@ -332,3 +332,21 @@ ins { color: #1d6b31; background: #e3f4e6; text-decoration: none; padding: 0 .2e
 .hr-alert { background: var(--cream); border-left: 5px solid var(--orange); border-radius: 12px; padding: .8rem 1rem; font-weight: 600; }
 #hr-balances td small { display: block; color: var(--muted); }
 #hr-leave-filter { font: inherit; padding: .35rem .5rem; border-radius: 8px; border: 1px solid var(--line); }
+
+/* Menu groups that fold and unfold */
+.nav-group { margin-top: .4rem; }
+.dash-nav .nav-head {
+  width: 100%; font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); padding: .55rem 1rem; gap: .4rem;
+}
+.dash-nav .nav-head span:first-child { margin-right: auto; }
+.chev::before { content: "▾"; font-size: 1rem; display: inline-block; transition: transform .2s; }
+.nav-group.folded .chev::before { transform: rotate(-90deg); }
+.dash-nav .nav-head:hover { color: var(--ink); }
+.nav-items { display: flex; flex-direction: column; gap: .2rem; padding-left: .5rem; }
+.nav-group.folded .nav-items { display: none; }
+.group-count:empty { display: none; }
+@media (max-width: 800px) {
+  .dash-nav { flex-direction: column; overflow-x: visible; }
+  .dash-nav button { white-space: normal; }
+}

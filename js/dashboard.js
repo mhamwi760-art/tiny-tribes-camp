@@ -150,13 +150,40 @@
     applyPermissions();
     showScreen("app");
     const start = location.hash.slice(1);
-    const allowed = $$(".dash-nav button:not(.hidden)").map((b) => b.dataset.tab);
+    const allowed = $$(".dash-nav [data-tab]:not(.hidden)").map((b) => b.dataset.tab);
     showTab(allowed.includes(start) ? start : "overview");
   }
 
   // Hide every button and tab this person is not allowed to use
   function applyPermissions() {
     $$("[data-need]").forEach((el) => el.classList.toggle("hidden", !can(el.dataset.need)));
+    // A menu group with nothing allowed inside is hidden too
+    $$(".nav-group").forEach((g) => g.classList.toggle("hidden", !$$(".nav-items [data-tab]:not(.hidden)", g).length));
+  }
+
+  /* Menu groups fold and unfold; the choice is remembered in this browser */
+  const NAV_KEY = "tt-nav-folded";
+  const folded = () => { try { return JSON.parse(localStorage.getItem(NAV_KEY)) || []; } catch (e) { return []; } };
+  function setFolded(group, fold) {
+    const g = $(`.nav-group[data-group="${group}"]`);
+    g.classList.toggle("folded", fold);
+    $(".nav-head", g).setAttribute("aria-expanded", String(!fold));
+    const list = folded().filter((x) => x !== group);
+    if (fold) list.push(group);
+    try { localStorage.setItem(NAV_KEY, JSON.stringify(list)); } catch (e) { /* ignore */ }
+    updateGroupCounts();
+  }
+  folded().forEach((gname) => {
+    const g = $(`.nav-group[data-group="${gname}"]`);
+    if (g) { g.classList.add("folded"); $(".nav-head", g).setAttribute("aria-expanded", "false"); }
+  });
+
+  // A folded group shows the total of the numbers inside it
+  function updateGroupCounts() {
+    $$(".nav-group").forEach((g) => {
+      const total = $$(".nav-items [data-tab]:not(.hidden) .count", g).reduce((n, c) => n + (parseInt(c.textContent, 10) || 0), 0);
+      $(".group-count", g).textContent = g.classList.contains("folded") && total ? total : "";
+    });
   }
 
   // Re-check the account on every action, in case the owner changed it
@@ -221,14 +248,22 @@
     if (!refreshMe()) return;
     const btn = $(`.dash-nav button[data-tab="${name}"]`);
     if (!btn || btn.classList.contains("hidden")) name = "overview";
-    $$(".dash-nav button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tab === name)));
+    $$(".dash-nav [data-tab]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tab === name)));
+    // Open the group of the page being shown
+    const group = $(`.dash-nav [data-tab="${name}"]`).closest(".nav-group");
+    if (group && group.classList.contains("folded")) setFolded(group.dataset.group, false);
     $$(".tab").forEach((t) => t.classList.toggle("hidden", t.id !== `tab-${name}`));
     history.replaceState(null, "", `#${name}`);
     render(name);
   }
 
   $(".dash-nav").addEventListener("click", (e) => {
-    const b = e.target.closest("button");
+    const head = e.target.closest(".nav-head");
+    if (head) {
+      const g = head.closest(".nav-group");
+      return setFolded(g.dataset.group, !g.classList.contains("folded"));
+    }
+    const b = e.target.closest("[data-tab]");
     if (b) showTab(b.dataset.tab);
   });
 
@@ -1225,6 +1260,7 @@
   function updateLeaveCount() {
     const pending = leaveList().filter((l) => leaveStatus(l) === "pending" && (me.role === "owner" || l.userId !== me.id)).length;
     $("#count-requests").textContent = pending || "";
+    updateGroupCounts();
   }
 
   /* ---------- HR tab (owner) ---------- */

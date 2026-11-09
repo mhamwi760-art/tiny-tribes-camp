@@ -8,11 +8,11 @@
   <link rel="icon" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/style.css?v=19">
-  <link rel="stylesheet" href="css/dashboard.css?v=26">
+  <link rel="stylesheet" href="css/dashboard.css?v=28">
   <script src="js/data.js?v=19" defer></script>
   <script src="js/store.js?v=19" defer></script>
   <script src="js/excel.js?v=24" defer></script>
-  <script src="js/dashboard.js?v=26" defer></script>
+  <script src="js/dashboard.js?v=27" defer></script>
 </head>
 <body class="dash locked">
   <header class="dash-top">
@@ -56,16 +56,46 @@
   <div class="dash-layout hidden" id="app">
     <nav class="dash-nav" aria-label="Dashboard sections">
       <button data-tab="overview" aria-pressed="true">Overview</button>
-      <button data-tab="orders" data-need="orders.view">Orders <span class="count" id="count-orders"></span></button>
-      <button data-tab="cancelled" data-need="orders.view">Cancelled <span class="count" id="count-cancelled"></span></button>
-      <button data-tab="messages" data-need="messages.view">Messages <span class="count" id="count-messages"></span></button>
-      <button data-tab="programs" data-need="programs.edit">Programs &amp; prices</button>
-      <button data-tab="photos" data-need="photos.edit">Photos</button>
-      <button data-tab="history" data-need="history.view">History</button>
-      <button data-tab="employees" data-need="owner">Employees</button>
-      <button data-tab="hr" data-need="owner">HR</button>
-      <button data-tab="requests" data-need="hr.approve">Leave requests <span class="count" id="count-requests"></span></button>
-      <button data-tab="myleave" data-need="staff">My leave</button>
+
+      <div class="nav-group" data-group="orders">
+        <button class="nav-head" aria-expanded="true"><span>🧾 Orders</span><span class="count group-count"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="nav-items">
+          <button data-tab="orders" data-need="orders.view">All orders <span class="count" id="count-orders"></span></button>
+          <button data-tab="cancelled" data-need="orders.view">Cancelled <span class="count" id="count-cancelled"></span></button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="customers">
+        <button class="nav-head" aria-expanded="true"><span>💬 Customers</span><span class="count group-count"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="nav-items">
+          <button data-tab="messages" data-need="messages.view">Messages <span class="count" id="count-messages"></span></button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="website">
+        <button class="nav-head" aria-expanded="true"><span>🌐 Website</span><span class="count group-count"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="nav-items">
+          <button data-tab="programs" data-need="programs.edit">Programs &amp; prices</button>
+          <button data-tab="photos" data-need="photos.edit">Photos</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="team">
+        <button class="nav-head" aria-expanded="true"><span>👥 Team</span><span class="count group-count"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="nav-items">
+          <button data-tab="employees" data-need="owner">Employees</button>
+          <button data-tab="hr" data-need="owner">HR</button>
+          <button data-tab="requests" data-need="hr.approve">Leave requests <span class="count" id="count-requests"></span></button>
+          <button data-tab="myleave" data-need="staff">My leave</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="records">
+        <button class="nav-head" aria-expanded="true"><span>📜 Records</span><span class="count group-count"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="nav-items">
+          <button data-tab="history" data-need="history.view">History</button>
+        </div>
+      </div>
     </nav>
 
     <main class="dash-main" id="main">
