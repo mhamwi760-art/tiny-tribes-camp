@@ -1616,6 +1616,22 @@
     updateLeaveCount();
   });
 
+  /* Start fresh (owner only): clears data, keeps accounts */
+  $("#reset-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!guard("owner")) return;
+    if ($("#reset-word").value.trim().toUpperCase() !== "RESET") return formError("#reset-error", "Please type RESET to confirm.");
+    formError("#reset-error", "");
+    const alsoContent = $("#reset-content").checked;
+    const keys = ["tt-orders", "tt-messages", "tt-history", "tt-leave", "tt-payroll"].concat(alsoContent ? ["tt-content"] : []);
+    keys.forEach((k) => localStorage.removeItem(k));
+    store.log({ area: "Employees", target: me.username, action: `Dashboard data cleared by ${me.name}${alsoContent ? " (programs, prices and photos reset too)" : ""}`, to: "Accounts kept" });
+    $("#reset-form").reset();
+    content = store.getContent();
+    alert("Done. The dashboard data is cleared and the accounts are kept.");
+    showTab("overview");
+  });
+
   /* ==========================================================
      Start
      ========================================================== */

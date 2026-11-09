@@ -313,3 +313,6 @@ ins { color: #1d6b31; background: #e3f4e6; text-decoration: none; padding: 0 .2e
 .reject-box { display: grid; gap: .4rem; margin-top: .8rem; max-width: 520px; }
 .reject-box textarea { font: inherit; padding: .5rem .7rem; border-radius: 10px; border: 1px solid var(--line); }
 #request-sent { margin-left: .8rem; }
+.danger-card { border: 2px solid #f3c2c2; margin-top: 2rem; }
+.danger-card h2 { color: var(--red); margin-top: 0; }
+.danger-card .field { max-width: 260px; }

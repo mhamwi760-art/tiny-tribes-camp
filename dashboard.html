@@ -8,11 +8,11 @@
   <link rel="icon" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/style.css?v=19">
-  <link rel="stylesheet" href="css/dashboard.css?v=24">
+  <link rel="stylesheet" href="css/dashboard.css?v=25">
   <script src="js/data.js?v=19" defer></script>
   <script src="js/store.js?v=19" defer></script>
   <script src="js/excel.js?v=24" defer></script>
-  <script src="js/dashboard.js?v=24" defer></script>
+  <script src="js/dashboard.js?v=25" defer></script>
 </head>
 <body class="dash locked">
   <header class="dash-top">
@@ -316,6 +316,15 @@
           </div>
         </form>
         <div id="employee-list"></div>
+
+        <form class="dash-card danger-card" id="reset-form" novalidate>
+          <h2>Start fresh</h2>
+          <p>Clears all orders, cancelled orders, messages, history, leave and payroll in this browser. <strong>Accounts and their job and salary details are kept.</strong></p>
+          <label class="perm"><input type="checkbox" id="reset-content"> Also put programs, prices and photos back to the original</label>
+          <div class="field"><label for="reset-word">Type <strong>RESET</strong> to confirm</label><input id="reset-word" autocomplete="off" autocapitalize="characters"></div>
+          <p class="form-error hidden" id="reset-error" role="alert"></p>
+          <button class="btn btn-primary btn-sm" type="submit">Clear dashboard data</button>
+        </form>
       </section>
     </main>
   </div>
