@@ -8,10 +8,10 @@
   <link rel="icon" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/style.css?v=16">
-  <link rel="stylesheet" href="css/dashboard.css?v=16">
+  <link rel="stylesheet" href="css/dashboard.css?v=17">
   <script src="js/data.js?v=16" defer></script>
   <script src="js/store.js?v=16" defer></script>
-  <script src="js/dashboard.js?v=16" defer></script>
+  <script src="js/dashboard.js?v=17" defer></script>
 </head>
 <body class="dash">
   <header class="dash-top">
@@ -48,7 +48,34 @@
       <section class="tab hidden" id="tab-orders">
         <div class="tab-head">
           <h1>Orders</h1>
-          <button class="btn btn-secondary btn-sm" id="export-orders">Download CSV</button>
+          <div class="tab-actions">
+            <button class="btn btn-primary btn-sm" id="add-test-order">+ Create test order</button>
+            <button class="btn btn-secondary btn-sm" id="export-orders">Download CSV</button>
+          </div>
+        </div>
+        <div class="dash-card filters" id="order-filters">
+          <div class="field search-field">
+            <label for="f-search">Search</label>
+            <input type="search" id="f-search" placeholder="Name, order number, phone, email, child, notes…" autocomplete="off">
+          </div>
+          <div class="filter-grid">
+            <div class="field"><label for="f-status">Status</label><select id="f-status"></select></div>
+            <div class="field"><label for="f-program">Program</label><select id="f-program"></select></div>
+            <div class="field"><label for="f-option">Option / week</label><select id="f-option"></select></div>
+            <div class="field"><label for="f-age">Child age</label><select id="f-age"></select></div>
+            <div class="field"><label for="f-from">From date</label><input type="date" id="f-from"></div>
+            <div class="field"><label for="f-to">To date</label><input type="date" id="f-to"></div>
+            <div class="field"><label for="f-type">Order type</label>
+              <select id="f-type"><option value="">All orders</option><option value="real">Real orders only</option><option value="test">Test orders only</option></select>
+            </div>
+          </div>
+          <div class="filter-foot">
+            <span id="orders-shown" role="status"></span>
+            <span>
+              <button class="link-btn" id="clear-filters">Clear filters</button>
+              <button class="link-btn" id="delete-test-orders">Delete all test orders</button>
+            </span>
+          </div>
         </div>
         <div class="dash-card table-wrap">
           <table class="table" id="orders-table">
@@ -57,7 +84,8 @@
             </thead>
             <tbody></tbody>
           </table>
-          <p class="empty hidden" id="orders-empty">No orders yet. They appear here when a parent registers on the site.</p>
+          <p class="empty hidden" id="orders-empty">No orders yet. They appear here when a parent registers on the site, or use <strong>+ Create test order</strong> to try it out.</p>
+          <p class="empty hidden" id="orders-nomatch">No orders match your search or filters.</p>
         </div>
       </section>
 

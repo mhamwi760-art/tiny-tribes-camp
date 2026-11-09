@@ -63,28 +63,97 @@
     $("#latest-orders").innerHTML = latest.length
       ? `<table class="table"><tbody>${latest
           .map(
-            (o) => `<tr><td>${fmtDate(o.createdAt)}</td><td>${esc(o.parent.name)}</td><td>${esc(o.programName)}</td><td>${money(o.total)}</td><td><span class="status ${statusClass(o.status)}">${esc(o.status)}</span></td></tr>`
+            (o) => `<tr><td>${fmtDate(o.createdAt)}</td><td>${esc(o.parent.name)}${o.test ? `<span class="test-badge">Test</span>` : ""}</td><td>${esc(o.programName)}</td><td>${money(o.total)}</td><td><span class="status ${statusClass(o.status)}">${esc(o.status)}</span></td></tr>`
           )
           .join("")}</tbody></table>`
       : `<p class="empty" style="padding:0">No orders yet.</p>`;
   }
 
   /* ---------- Orders ---------- */
+  const F = (id) => $(`#f-${id}`);
+  const norm = (v) => String(v ?? "").toLowerCase();
+  const dayKey = (iso) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  // Every piece of text in an order, so the search finds anything
+  function orderText(o) {
+    return norm([
+      o.id, o.status, o.method, o.programName, o.optionLabel, o.total, money(o.total), fmtDate(o.createdAt),
+      o.parent.name, o.parent.phone, phoneDigits(o.parent.phone), o.parent.email, o.parent.emergency, phoneDigits(o.parent.emergency),
+      ...o.children.flatMap((c) => [c.name, c.age, c.notes]),
+      o.test ? "test" : ""
+    ].join(" "));
+  }
+
+  // Fill a filter list, keeping what was picked before
+  function fillSelect(sel, allLabel, values) {
+    const keep = sel.value;
+    sel.innerHTML = `<option value="">${allLabel}</option>` + values.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join("");
+    sel.value = values.some(([v]) => v === keep) ? keep : "";
+  }
+
+  function fillFilters(orders) {
+    const uniq = (arr) => [...new Map(arr.map((x) => [x[0], x])).values()];
+    fillSelect(F("status"), "All statuses", uniq([...STATUSES, ...orders.map((o) => o.status)].map((s) => [s, s])));
+    fillSelect(F("program"), "All programs", uniq([
+      ...Object.entries(content.programs).map(([id, p]) => [id, p.name]),
+      ...orders.map((o) => [o.programId, o.programName])
+    ]));
+    const prog = F("program").value;
+    fillSelect(F("option"), "All options", uniq([
+      ...Object.entries(content.programs).filter(([id]) => !prog || id === prog).flatMap(([, p]) => p.options.map((op) => [op.id, `${op.label} (${op.dates})`])),
+      ...orders.filter((o) => !prog || o.programId === prog).map((o) => [o.optionId, o.optionLabel])
+    ]));
+    fillSelect(F("age"), "All ages", uniq([
+      ...Object.values(content.programs).flatMap((p) => p.ages),
+      ...orders.flatMap((o) => o.children.map((c) => c.age))
+    ].filter(Boolean).map((a) => [a, a])));
+  }
+
+  function filteredOrders(orders) {
+    const words = norm(F("search").value).split(/\s+/).filter(Boolean);
+    const status = F("status").value, program = F("program").value, option = F("option").value;
+    const age = F("age").value, from = F("from").value, to = F("to").value, type = F("type").value;
+    return orders.filter((o) => {
+      if (status && o.status !== status) return false;
+      if (program && o.programId !== program) return false;
+      if (option && o.optionId !== option) return false;
+      if (age && !o.children.some((c) => c.age === age)) return false;
+      if (from && dayKey(o.createdAt) < from) return false;
+      if (to && dayKey(o.createdAt) > to) return false;
+      if (type === "test" && !o.test) return false;
+      if (type === "real" && o.test) return false;
+      if (words.length) {
+        const text = orderText(o);
+        if (!words.every((w) => text.includes(w))) return false;
+      }
+      return true;
+    });
+  }
+
   function renderOrders() {
-    const orders = store.getOrders();
+    content = store.getContent();
+    const all = store.getOrders();
+    fillFilters(all);
+    const orders = filteredOrders(all);
     const tbody = $("#orders-table tbody");
-    $("#orders-empty").classList.toggle("hidden", orders.length > 0);
+    $("#orders-empty").classList.toggle("hidden", all.length > 0);
+    $("#orders-nomatch").classList.toggle("hidden", !all.length || orders.length > 0);
+    const total = orders.reduce((n, o) => n + (Number(o.total) || 0), 0);
+    $("#orders-shown").textContent = all.length ? `Showing ${orders.length} of ${all.length} orders · ${money(total)}` : "";
     tbody.innerHTML = orders
       .map(
         (o) => `
       <tr data-id="${esc(o.id)}">
         <td>${fmtDate(o.createdAt)}</td>
-        <td><code>${esc(o.id)}</code></td>
+        <td><code>${esc(o.id)}</code>${o.test ? `<span class="test-badge">Test</span>` : ""}</td>
         <td>${esc(o.parent.name)}<small><a href="tel:${esc(o.parent.phone)}">${esc(o.parent.phone)}</a></small></td>
         <td>${esc(o.programName)}<small>${esc(o.optionLabel)}</small></td>
         <td>${o.children.length}</td>
         <td><strong>${money(o.total)}</strong></td>
-        <td><select class="order-status" aria-label="Order status">${STATUSES.map((s) => `<option ${s === o.status ? "selected" : ""}>${s}</option>`).join("")}</select></td>
+        <td><select class="order-status" aria-label="Order status">${[...new Set([...STATUSES, o.status])].map((s) => `<option ${s === o.status ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></td>
         <td style="white-space:nowrap"><button class="link-btn toggle-details">Details</button><button class="link-btn delete-order">Delete</button></td>
       </tr>
       <tr class="details hidden" data-for="${esc(o.id)}">
@@ -99,8 +168,80 @@
       .join("");
   }
 
+  $("#f-search").addEventListener("input", renderOrders);
+  $("#order-filters").addEventListener("change", (e) => {
+    if (e.target.id === "f-search") return;
+    if (e.target.id === "f-program") F("option").value = "";
+    renderOrders();
+  });
+  $("#clear-filters").addEventListener("click", () => {
+    ["search", "status", "program", "option", "age", "from", "to", "type"].forEach((k) => (F(k).value = ""));
+    renderOrders();
+  });
+
+  /* Test orders: made-up orders, marked "Test", for trying the dashboard */
+  const TEST_PARENTS = ["Sara Al-Ahmad", "Fatma Al-Sabah", "Noura Al-Mutairi", "Dana Al-Kandari", "Mariam Al-Enezi", "Hessa Al-Rashidi", "Ahmad Al-Ali", "Yousef Al-Hajri"];
+  const TEST_KIDS = ["Ali", "Omar", "Lulwa", "Jana", "Hamad", "Fajer", "Salem", "Dalal", "Abdullah", "Shahad", "Bader", "Reem"];
+  const TEST_NOTES = ["", "", "", "Nut allergy", "Shy at first", "Needs a nap at 5", "Asthma inhaler in bag"];
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const kwPhone = () => `+965 ${pick(["5", "6", "9"])}${String(Math.floor(Math.random() * 1e7)).padStart(7, "0")}`;
+
+  $("#add-test-order").addEventListener("click", () => {
+    content = store.getContent();
+    const priced = Object.entries(content.programs).filter(([, p]) => p.options.length);
+    if (!priced.length) {
+      alert("Add at least one price in Programs & prices first.");
+      return;
+    }
+    const open = priced.filter(([, p]) => p.open);
+    const [programId, p] = pick(open.length ? open : priced);
+    const option = pick(p.options);
+    const ages = p.ages.length ? p.ages : ["—"];
+    const name = pick(TEST_PARENTS);
+    const family = name.split(" ").slice(1).join(" ");
+    const children = Array.from({ length: 1 + Math.floor(Math.random() * 3) }, () => ({
+      name: `${pick(TEST_KIDS)} ${family}`,
+      age: pick(ages),
+      notes: pick(TEST_NOTES)
+    }));
+    const order = store.addOrder({
+      test: true,
+      programId,
+      programName: p.name,
+      optionId: option.id,
+      optionLabel: `${option.label} (${option.dates})`,
+      unitPrice: option.price,
+      parent: {
+        name,
+        phone: kwPhone(),
+        email: `${name.split(" ")[0].toLowerCase()}@example.com`,
+        emergency: kwPhone()
+      },
+      children,
+      total: option.price * children.length
+    });
+    if (Math.random() < 0.6) {
+      store.updateOrder(order.id, { status: "Paid (demo)", method: pick(["KNET", "CARD"]), paidAt: new Date().toISOString() });
+    }
+    renderOrders();
+    updateCounts();
+  });
+
+  $("#delete-test-orders").addEventListener("click", () => {
+    const tests = store.getOrders().filter((o) => o.test);
+    if (!tests.length) {
+      alert("There are no test orders.");
+      return;
+    }
+    if (!confirm(`Delete all ${tests.length} test orders? Real orders are not touched.`)) return;
+    tests.forEach((o) => store.deleteOrder(o.id));
+    renderOrders();
+    updateCounts();
+  });
+
   $("#orders-table").addEventListener("change", (e) => {
     if (!e.target.matches(".order-status")) return;
+    e.stopPropagation();
     store.updateOrder(e.target.closest("tr").dataset.id, { status: e.target.value });
     updateCounts();
   });
@@ -117,11 +258,12 @@
     }
   });
 
+  // Downloads the orders you can see (search and filters apply)
   $("#export-orders").addEventListener("click", () => {
-    const rows = [["Date", "Reference", "Parent", "Phone", "Email", "Emergency", "Program", "Option", "Children", "Child names and ages", "Total", "Status"]];
-    store.getOrders().forEach((o) =>
+    const rows = [["Date", "Reference", "Test order", "Parent", "Phone", "Email", "Emergency", "Program", "Option", "Children", "Child names and ages", "Total", "Status"]];
+    filteredOrders(store.getOrders()).forEach((o) =>
       rows.push([
-        o.createdAt, o.id, o.parent.name, o.parent.phone, o.parent.email, o.parent.emergency,
+        o.createdAt, o.id, o.test ? "Yes" : "", o.parent.name, o.parent.phone, o.parent.email, o.parent.emergency,
         o.programName, o.optionLabel, o.children.length,
         o.children.map((c) => `${c.name} (${c.age})`).join("; "), o.total, o.status
       ])
