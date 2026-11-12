@@ -270,13 +270,13 @@ function initGallery() {
     if (!btn) return;
     openViewer(Number(btn.dataset.index));
   });
-  $(".lb-prev", box).addEventListener("click", () => show(index - 1));
-  $(".lb-next", box).addEventListener("click", () => show(index + 1));
+  $(".lb-prev", box).addEventListener("click", () => slide(-1));
+  $(".lb-next", box).addEventListener("click", () => slide(1));
   $(".lightbox-close", box).addEventListener("click", closeViewer);
   box.addEventListener("click", (e) => { if (e.target === box && view.s === 1) closeViewer(); });
   box.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowLeft") show(index - 1);
-    if (e.key === "ArrowRight") show(index + 1);
+    if (e.key === "ArrowLeft") slide(-1);
+    if (e.key === "ArrowRight") slide(1);
   });
 
   // Gestures on the photo: one finger swipes (or pans when zoomed), two fingers pinch-zoom,
@@ -316,7 +316,8 @@ function initGallery() {
         apply(false);
       } else {
         img.style.transition = "none";
-        img.style.transform = `translateX(${dx * 0.6}px)`; // follow the finger a little while swiping
+        img.style.transform = `translateX(${dx}px)`; // the photo follows the finger
+        img.style.opacity = String(Math.max(0.4, 1 - Math.abs(dx) / 500));
       }
     }
   });
@@ -337,7 +338,6 @@ function initGallery() {
     // single finger
     const dx = e.clientX - gesture.x;
     const dy = e.clientY - gesture.y;
-    const quick = Date.now() - gesture.t < 600;
     const g = gesture;
     gesture = null;
 
@@ -356,12 +356,37 @@ function initGallery() {
     }
 
     if (view.s > 1) return; // was moving around a zoomed photo
-    if (quick && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      show(index + (dx < 0 ? 1 : -1));
+    const speed = Math.abs(dx) / Math.max(1, Date.now() - g.t); // px per ms
+    const sideways = Math.abs(dx) > Math.abs(dy) * 1.2;
+    if (sideways && (Math.abs(dx) > img.clientWidth * 0.22 || (speed > 0.35 && Math.abs(dx) > 25))) {
+      slide(dx < 0 ? 1 : -1);
     } else {
+      img.style.opacity = "1";
       apply(true); // snap back
     }
   }
+  // Slide the photo out, then slide the next one in
+  let sliding = false;
+  function slide(dir) {
+    if (sliding) return;
+    sliding = true;
+    const w = img.clientWidth;
+    img.style.transition = "transform .16s ease-out, opacity .16s ease-out";
+    img.style.transform = `translateX(${-dir * w}px)`;
+    img.style.opacity = "0";
+    setTimeout(() => {
+      show(index + dir);
+      img.style.transition = "none";
+      img.style.transform = `translateX(${dir * w * 0.35}px)`;
+      img.style.opacity = "0";
+      void img.offsetWidth; // apply the start position before animating in
+      img.style.transition = "transform .2s ease-out, opacity .2s ease-out";
+      img.style.transform = "none";
+      img.style.opacity = "1";
+      sliding = false;
+    }, 160);
+  }
+
   img.addEventListener("pointerup", endPointer);
   img.addEventListener("pointercancel", endPointer);
 
