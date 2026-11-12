@@ -878,10 +878,35 @@ legend {
 
 .winter { background: linear-gradient(180deg, #13284d 0%, #2c5a99 70%, #6d9bd6 100%); color: var(--white); }
 .winter h1 { color: var(--white); }
+.winter .season-card { background: rgba(228, 238, 250, .96); }
 .winter .eyebrow { color: #bcd6ff; }
 .season-tip { opacity: .85; }
 #snow { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 #tilt-button { margin-top: .5rem; }
+#snow-front { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+
+/* Snow piled on the winter price cards */
+#winter-details .price-card { position: relative; overflow: visible; cursor: pointer; }
+#winter-details .price-cards { margin-top: 2.8rem; row-gap: 2.6rem; }
+.snow-cap {
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  top: -30px;
+  height: 46px;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 5px rgba(19, 40, 77, .3));
+  transform-origin: bottom center;
+  transition: opacity .6s ease, transform .6s ease;
+  animation: settle .9s ease-out;
+}
+.snow-cap.fallen {
+  opacity: 0;
+  transform: translateY(10px) scaleY(.2);
+  transition: opacity .15s ease, transform .15s ease;
+  animation: none;
+}
+@keyframes settle { from { transform: scaleY(.2); opacity: 0; } to { transform: none; opacity: 1; } }
 
 .summer { background: linear-gradient(180deg, #7cc8f2 0%, #bfe6fb 55%, var(--cream) 100%); }
 .summer h2 { color: var(--red); }

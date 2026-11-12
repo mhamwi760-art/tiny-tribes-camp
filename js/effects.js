@@ -85,6 +85,14 @@
       canvas.style.height = h + "px";
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = "#ffffff"; // resizing the canvas resets this
+      if (front) {
+        front.width = w * dpr;
+        front.height = h * dpr;
+        front.style.width = w + "px";
+        front.style.height = h + "px";
+        fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        fctx.fillStyle = "#ffffff";
+      }
       const target = Math.min(220, Math.round((w * h) / 6000));
       while (flakes.length < target) flakes.push(makeFlake(true));
       flakes.length = target;
@@ -140,8 +148,69 @@
         ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
         ctx.fill();
       }
+
+      // Snow knocked off the price cards (drawn in front of the cards)
+      if (front && (chunks.length || frontDirty)) {
+        fctx.clearRect(0, 0, w, h);
+        frontDirty = chunks.length > 0;
+        for (let i = chunks.length - 1; i >= 0; i--) {
+          const c = chunks[i];
+          c.vy += 0.22;
+          c.vx = c.vx * 0.99 + tilt.x * 0.05;
+          c.x += c.vx;
+          c.y += c.vy;
+          if (c.y > h + 10) {
+            chunks.splice(i, 1);
+            continue;
+          }
+          fctx.globalAlpha = c.alpha;
+          fctx.beginPath();
+          fctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+          fctx.fill();
+        }
+      }
       raf = requestAnimationFrame(frame);
     }
+
+    /* ----- Snow piles on top of the price cards ----- */
+    const front = document.getElementById("snow-front");
+    const fctx = front ? front.getContext("2d") : null;
+    const chunks = [];
+    let frontDirty = false;
+    const CAP_SVG =
+      '<svg viewBox="0 0 200 50" preserveAspectRatio="none" width="100%" height="100%">' +
+      '<defs><linearGradient id="snowShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".65" stop-color="#f3f8ff"/><stop offset="1" stop-color="#cfe0f5"/></linearGradient></defs>' +
+      '<path fill="url(#snowShade)" stroke="#b3cbe8" stroke-width="1.2" vector-effect="non-scaling-stroke" d="M1 40 C1 28 8 22 18 22 C22 12 34 8 44 14 C52 4 70 2 80 10 C90 1 110 0 120 9 C130 2 150 4 158 13 C168 8 182 12 186 22 C196 22 199 30 199 40 C196 46 190 44 186 48 C180 42 172 46 166 49 C158 43 150 47 140 46 C130 42 120 48 108 46 C98 42 88 48 76 46 C66 42 56 48 46 46 C36 42 28 48 18 47 C12 43 6 46 1 40 Z"/></svg>';
+
+    function knockOff(cap) {
+      if (cap.classList.contains("fallen")) return;
+      const s = section.getBoundingClientRect();
+      const r = cap.getBoundingClientRect();
+      const count = reduceMotion ? 0 : Math.round(r.width / 2.5);
+      for (let i = 0; i < count; i++) {
+        chunks.push({
+          x: r.left - s.left + Math.random() * r.width,
+          y: r.top - s.top + Math.random() * r.height * 0.7,
+          r: Math.random() * 3 + 1.5,
+          vx: (Math.random() - 0.5) * 3,
+          vy: -Math.random() * 3,
+          alpha: Math.random() * 0.3 + 0.7
+        });
+      }
+      cap.classList.add("fallen");
+      setTimeout(() => cap.classList.remove("fallen"), 6000); // the snow piles up again
+    }
+
+    document.querySelectorAll("#winter-details .price-card").forEach((card) => {
+      const cap = document.createElement("div");
+      cap.className = "snow-cap";
+      cap.setAttribute("aria-hidden", "true");
+      cap.innerHTML = CAP_SVG;
+      card.prepend(cap);
+      // Wave the mouse over it, or tap it on a phone
+      card.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") knockOff(cap); });
+      card.addEventListener("pointerdown", () => knockOff(cap));
+    });
 
     ctx.fillStyle = "#ffffff";
 
@@ -192,16 +261,48 @@
 
     let raf = null;
     let t = Math.random() * 100;
+    let pos = null; // where the sun is now
+    const pointer = { x: 0, y: 0, active: false };
+    let releaseTimer;
+
+    // The sun follows the mouse, or the finger on a phone
+    function setPointer(e) {
+      const rect = section.getBoundingClientRect();
+      pointer.x = e.clientX - rect.left;
+      pointer.y = e.clientY - rect.top;
+      pointer.active = true;
+      clearTimeout(releaseTimer);
+    }
+    section.addEventListener("pointermove", setPointer);
+    section.addEventListener("pointerdown", setPointer);
+    section.addEventListener("pointerleave", () => (pointer.active = false));
+    section.addEventListener("pointerup", (e) => {
+      // On touch, stay where the finger lifted for a moment, then wander again
+      if (e.pointerType !== "mouse") releaseTimer = setTimeout(() => (pointer.active = false), 2500);
+    });
 
     function frame() {
       t += 0.004;
       const w = section.clientWidth;
       const h = section.clientHeight;
       const size = sun.offsetWidth;
-      // A slow looping path across the top part of the section
-      const x = (0.5 + 0.42 * Math.sin(t) + tilt.x * 0.06) * (w - size);
-      const y = (0.22 + 0.18 * Math.sin(t * 2.1 + 1) + tilt.y * 0.08) * (h - size);
-      sun.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
+      let tx;
+      let ty;
+      if (pointer.active) {
+        tx = pointer.x - size / 2;
+        ty = pointer.y - size / 2;
+      } else {
+        // A slow looping path across the top part of the section
+        tx = (0.5 + 0.42 * Math.sin(t) + tilt.x * 0.06) * (w - size);
+        ty = (0.22 + 0.18 * Math.sin(t * 2.1 + 1) + tilt.y * 0.08) * (h - size);
+      }
+      tx = Math.max(-size * 0.2, Math.min(w - size * 0.8, tx));
+      ty = Math.max(-size * 0.2, Math.min(h - size * 0.8, ty));
+      if (!pos) pos = { x: tx, y: ty };
+      const ease = pointer.active ? 0.12 : 0.03;
+      pos.x += (tx - pos.x) * ease;
+      pos.y += (ty - pos.y) * ease;
+      sun.style.transform = `translate3d(${pos.x.toFixed(1)}px, ${pos.y.toFixed(1)}px, 0)`;
       raf = requestAnimationFrame(frame);
     }
 
