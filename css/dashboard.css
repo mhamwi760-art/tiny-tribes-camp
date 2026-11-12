@@ -16,7 +16,7 @@ body.dash { background: #f7f3ec; }
   top: 0;
   z-index: 30;
 }
-.dash-top .brand img { height: 40px; width: auto; }
+.dash-top .brand img { height: 32px; width: auto; }
 .dash-title { font-weight: 800; color: var(--muted); margin-right: auto; }
 
 .demo-banner {

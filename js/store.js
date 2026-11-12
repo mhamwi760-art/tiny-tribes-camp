@@ -45,10 +45,23 @@
   window.TTStore = {
     mode: "demo",
 
+    /* Small version of a site photo for tiles and grids (uploaded photos have none) */
+    thumb(src) {
+      return src.startsWith("assets/img/gallery/") ? src.replace("assets/img/gallery/", "assets/img/gallery/thumbs/") : src;
+    },
+
     /* ---------- Content (programs, prices, photos) ---------- */
     getContent() {
       const saved = read(KEYS.content, null);
-      if (saved && saved.version === window.TT_DEFAULTS.version) return saved;
+      if (!saved) return clone(window.TT_DEFAULTS);
+      if (saved.version === 2) {
+        // Photos moved from .jpg to the lighter .webp format; keep the saved changes
+        saved.categories.forEach((c) => {
+          c.photos = c.photos.map((p) => (p.startsWith("assets/img/gallery/") ? p.replace(/\.jpg$/, ".webp") : p));
+        });
+        saved.version = 3;
+      }
+      if (saved.version === window.TT_DEFAULTS.version) return saved;
       return clone(window.TT_DEFAULTS);
     },
     saveContent(content) {

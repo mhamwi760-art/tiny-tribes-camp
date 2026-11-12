@@ -18,6 +18,7 @@ function esc(str) {
 const content = window.TTStore.getContent();
 const money = (n) => `${content.currency} ${Number(n).toFixed(3)}`;
 const shortMoney = (n) => `${content.currency} ${Number(n)}`;
+const thumb = (src) => window.TTStore.thumb(src);
 
 function findOption(programId, optionId) {
   const program = content.programs[programId];
@@ -100,7 +101,7 @@ function initCategories() {
     .map(
       (c) => `
       <a class="category reveal" href="gallery.html?c=${encodeURIComponent(c.id)}">
-        <img src="${esc(c.photos[0] || "")}" alt="" width="400" height="300" loading="lazy" decoding="async">
+        <img src="${esc(thumb(c.photos[0] || ""))}" alt="" width="400" height="300" loading="lazy" decoding="async">
         <span class="category-body">
           <strong>${esc(c.name)}</strong>
           <small>${c.photos.length} photos</small>
@@ -124,9 +125,11 @@ function initProgramTeasers() {
         <p>${p.dates ? esc(p.dates) : "Dates to be announced"}</p>
         ${from !== null ? `<p class="from">From <strong>${shortMoney(from)}</strong></p>` : ""}
         <span class="link">View program →</span>
+        ${(window.TT_CHARACTERS && window.TT_CHARACTERS[id]) || ""}
       </a>`;
     })
     .join("");
+  if (window.TT_initEyes) window.TT_initEyes();
 }
 
 /* ---------- Contact form (messages) ---------- */
@@ -178,7 +181,7 @@ function initGallery() {
     grid.innerHTML = list
       .map(
         (p, i) => `<button class="photo" data-index="${i}" aria-label="Open photo ${i + 1} of ${list.length}">
-          <img src="${esc(p.src)}" alt="${esc(p.name)} at Tiny Tribes camp" loading="lazy" decoding="async" width="300" height="300">
+          <img src="${esc(thumb(p.src))}" alt="${esc(p.name)} at Tiny Tribes camp" loading="lazy" decoding="async" width="300" height="300">
         </button>`
       )
       .join("");
@@ -542,8 +545,57 @@ function initPayment() {
   });
 }
 
+/* ---------- Page-change hat ----------
+   A feathered tribe hat drops in when moving to another page.
+   It also covers the wait while the next page loads. */
+const HAT_SVG = `
+<svg viewBox="0 0 200 150" aria-hidden="true">
+  <g class="hat">
+    <g transform="translate(62 104) rotate(-28)"><g class="feather f2">
+      <path d="M0 0 C-12 -26 -13 -58 0 -88 C13 -58 12 -26 0 0Z" fill="#f36c21"/>
+      <path d="M0 -6 V-82 M0 -30 L-8 -38 M0 -48 L8 -56 M0 -62 L-7 -68" stroke="#fbaa1e" stroke-width="3" stroke-linecap="round" fill="none"/>
+    </g></g>
+    <g transform="translate(138 104) rotate(28)"><g class="feather f3">
+      <path d="M0 0 C-12 -26 -13 -58 0 -88 C13 -58 12 -26 0 0Z" fill="#fbaa1e"/>
+      <path d="M0 -6 V-82 M0 -30 L8 -38 M0 -48 L-8 -56 M0 -62 L7 -68" stroke="#f36c21" stroke-width="3" stroke-linecap="round" fill="none"/>
+    </g></g>
+    <g transform="translate(100 98)"><g class="feather f1">
+      <path d="M0 0 C-16 -32 -18 -74 0 -112 C18 -74 16 -32 0 0Z" fill="#db2126"/>
+      <path d="M0 -6 V-104 M0 -36 L-10 -46 M0 -56 L10 -66 M0 -76 L-9 -84" stroke="#f36c21" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+    </g></g>
+    <path d="M28 104 Q100 84 172 104 L172 132 Q100 112 28 132Z" fill="#f36c21" stroke="#db2126" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M40 124 L50 108 L60 121 L70 105 L80 118 L90 102 L100 116 L110 102 L120 118 L130 105 L140 121 L150 108 L160 124" fill="none" stroke="#fbaa1e" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+</svg>
+<div class="dots"><span></span><span></span><span></span></div>`;
+
+function initHat() {
+  const loader = document.createElement("div");
+  loader.className = "hat-loader";
+  loader.setAttribute("aria-hidden", "true");
+  loader.innerHTML = `<div>${HAT_SVG}</div>`;
+  document.body.appendChild(loader);
+
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest("a[href]");
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (a.target === "_blank" || a.hasAttribute("download")) return;
+    const url = new URL(a.href, location.href);
+    if (url.origin !== location.origin) return;
+    // Same page (just a #section): no hat
+    if (url.pathname === location.pathname && url.search === location.search) return;
+    e.preventDefault();
+    loader.classList.add("show");
+    setTimeout(() => (location.href = url.href), 420);
+  });
+
+  // Coming back with the browser's Back button: hide the hat again
+  window.addEventListener("pageshow", () => loader.classList.remove("show"));
+}
+
 /* ---------- Start ---------- */
 document.addEventListener("DOMContentLoaded", () => {
+  initHat();
   initNav();
   initYear();
   initFacts();

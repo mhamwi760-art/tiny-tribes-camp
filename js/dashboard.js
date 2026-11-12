@@ -274,7 +274,7 @@
           .map(
             (src, i) => `
         <div class="dash-photo ${i === 0 ? "cover" : ""}" data-index="${i}">
-          <img src="${esc(src)}" alt="" loading="lazy">
+          <img src="${esc(window.TTStore.thumb(src))}" alt="" loading="lazy">
           <div class="tools">
             ${i > 0 ? `<button class="make-cover" title="Make cover photo" aria-label="Make cover photo">★</button>` : ""}
             <button class="remove-photo" title="Remove photo" aria-label="Remove photo">✕</button>

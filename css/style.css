@@ -13,6 +13,54 @@
 }
 */
 
+/* Montserrat, hosted with the site (no outside font requests) */
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("../assets/fonts/montserrat-latin.woff2") format("woff2");
+}
+
+/* Smooth cross-fade between pages in browsers that support it */
+@view-transition { navigation: auto; }
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: .35s; }
+
+/* ---------- Page-change hat (brand feathers) ---------- */
+.hat-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: var(--cream);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .2s ease, visibility 0s linear .2s;
+}
+.hat-loader.show { opacity: 1; visibility: visible; transition: opacity .15s ease; }
+.hat-loader svg { width: 210px; height: auto; overflow: visible; }
+.hat-loader.show .hat { animation: hat-drop .55s cubic-bezier(.3, 1.5, .5, 1) both; transform-origin: 100px 120px; }
+.hat-loader .feather { transform-box: fill-box; transform-origin: 50% 100%; }
+.hat-loader.show .feather { animation: wiggle .5s ease-in-out .3s infinite alternate; }
+.hat-loader.show .feather.f2 { animation-delay: .4s; }
+.hat-loader.show .feather.f3 { animation-delay: .5s; }
+.hat-loader .dots { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
+.hat-loader .dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); animation: dot .9s ease-in-out infinite; }
+.hat-loader .dots span:nth-child(2) { animation-delay: .15s; background: var(--red); }
+.hat-loader .dots span:nth-child(3) { animation-delay: .3s; background: var(--yellow); }
+@keyframes hat-drop {
+  0% { transform: translateY(-140px) rotate(-12deg) scale(.7); opacity: 0; }
+  60% { transform: translateY(8px) rotate(4deg) scale(1.05); opacity: 1; }
+  100% { transform: none; }
+}
+@keyframes wiggle { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+@keyframes dot { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) {
+  .hat-loader.show .hat, .hat-loader.show .feather, .hat-loader .dots span { animation: none; }
+}
+
 :root {
   /* Primary palette */
   --red: #db2126;
@@ -132,7 +180,7 @@ h3 { font-size: 1.2rem; font-weight: 700; }
   justify-content: space-between;
   height: 76px;
 }
-.brand img { height: 52px; width: auto; }
+.brand img { height: 40px; width: auto; }
 .nav-links {
   display: flex;
   align-items: center;
@@ -196,7 +244,7 @@ h3 { font-size: 1.2rem; font-weight: 700; }
 .hero {
   position: relative;
   color: var(--white);
-  background: var(--red) url("../assets/img/hero.jpg") center / cover no-repeat;
+  background: var(--red) url("../assets/img/hero.webp") center / cover no-repeat;
   isolation: isolate;
 }
 .hero::before {
@@ -762,8 +810,32 @@ legend {
 .program-teaser h3 { color: var(--white); font-size: 1.8rem; margin-top: .8rem; }
 .program-teaser p { margin: .2rem 0; }
 .program-teaser .link { display: inline-block; margin-top: 1rem; font-weight: 700; }
-.program-teaser.winter::after { content: "\2744"; position: absolute; right: -10px; bottom: -40px; font-size: 9rem; opacity: .15; }
-.program-teaser.summer::after { content: "\2600"; position: absolute; right: -10px; bottom: -40px; font-size: 9rem; opacity: .2; }
+.program-teaser { padding-right: 180px; min-height: 240px; }
+.program-teaser > :not(.kid) { position: relative; z-index: 1; }
+.kid {
+  position: absolute;
+  right: 14px;
+  bottom: 0;
+  width: 150px;
+  height: auto;
+  transition: transform .3s ease;
+}
+.program-teaser:hover .kid { transform: translateY(-6px) rotate(-2deg); }
+.kid .pupil { transition: transform .08s linear; }
+.kid .lid { transform-box: fill-box; transform-origin: 50% 0; transform: scaleY(0); animation: blink 5s infinite; }
+.kid-summer .lid { animation-delay: 1.7s; }
+@keyframes blink { 0%, 94%, 100% { transform: scaleY(0); } 96% { transform: scaleY(1); } }
+.kid .pompom { transform-box: fill-box; transform-origin: 50% 100%; animation: bob 2.4s ease-in-out infinite; }
+.kid .scarf-tail { transform-box: fill-box; transform-origin: 50% 0; animation: sway 2s ease-in-out infinite alternate; }
+@keyframes bob { 50% { transform: translateY(-3px); } }
+@keyframes sway { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+@media (max-width: 560px) {
+  .program-teaser { padding: 1.6rem 130px 1.6rem 1.4rem; min-height: 210px; }
+  .kid { width: 112px; right: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kid .lid, .kid .pompom, .kid .scarf-tail { animation: none; }
+}
 
 /* Chips (gallery tabs, program switch) */
 .chips, .program-switch {

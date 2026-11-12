@@ -8,13 +8,13 @@
   const G = "assets/img/gallery";
 
   function photos(id, count) {
-    const list = [`${G}/covers/${id}.jpg`];
-    for (let i = 1; i <= count; i++) list.push(`${G}/${id}/${id}-${i}.jpg`);
+    const list = [`${G}/covers/${id}.webp`];
+    for (let i = 1; i <= count; i++) list.push(`${G}/${id}/${id}-${i}.webp`);
     return list;
   }
 
   window.TT_DEFAULTS = {
-    version: 2,
+    version: 3,
     currency: "KWD",
     contact: {
       phone: "+965 60733303",
