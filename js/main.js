@@ -243,13 +243,31 @@ function initGallery() {
     if (e.key === "ArrowLeft") show(index - 1);
     if (e.key === "ArrowRight") show(index + 1);
   });
-  let startX = null;
-  box.addEventListener("touchstart", (e) => (startX = e.touches[0].clientX), { passive: true });
+  // Swipe left/right with ONE finger to change photo.
+  // Pinch-zoom (two fingers) or moving around a zoomed-in photo never changes it.
+  let swipe = null;
+  const zoomedIn = () => window.visualViewport && window.visualViewport.scale > 1.05;
+  box.addEventListener("touchstart", (e) => {
+    if (e.touches.length > 1 || zoomedIn()) {
+      swipe = null; // second finger down: this is a pinch, not a swipe
+      return;
+    }
+    swipe = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+  }, { passive: true });
+  box.addEventListener("touchmove", (e) => {
+    if (e.touches.length > 1) swipe = null;
+  }, { passive: true });
   box.addEventListener("touchend", (e) => {
-    if (startX === null) return;
-    const dx = e.changedTouches[0].clientX - startX;
-    if (Math.abs(dx) > 40) show(index + (dx < 0 ? 1 : -1));
-    startX = null;
+    if (!swipe || e.touches.length > 0 || zoomedIn()) {
+      if (e.touches.length === 0) swipe = null;
+      return;
+    }
+    const dx = e.changedTouches[0].clientX - swipe.x;
+    const dy = e.changedTouches[0].clientY - swipe.y;
+    const quick = Date.now() - swipe.t < 600;
+    swipe = null;
+    // Clearly sideways, long enough, and quick
+    if (quick && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) show(index + (dx < 0 ? 1 : -1));
   });
 
   render();
