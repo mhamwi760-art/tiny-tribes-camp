@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Programs | Tiny Tribes Kids Camp</title>
+  <meta name="description" content="Tiny Tribes Winter Camp and Summer Camp programs: dates, times, age groups and prices.">
+  <link rel="icon" href="assets/img/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/data.js" defer></script>
+  <script src="js/store.js" defer></script>
+  <script src="js/main.js" defer></script>
+  <script src="js/effects.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <nav class="container nav" aria-label="Main">
+      <a class="brand" href="index.html"><img src="assets/img/logo-header.webp" alt="Tiny Tribes Kids Camp" width="163" height="52"></a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" id="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="gallery.html">Activities</a></li>
+        <li><a href="program.html" aria-current="page">Programs</a></li>
+        <li><a href="index.html#contact">Contact</a></li>
+        <li><a class="btn btn-primary" href="register.html">Register</a></li>
+      </ul>
+    </nav>
+  </header>
+
+
+  <main id="main">
+    <div id="program-page">
+      <nav class="program-switch container" aria-label="Programs">
+        <a href="#winter" class="chip">❄️ Winter Camp</a>
+        <a href="#summer" class="chip">☀️ Summer Camp</a>
+      </nav>
+
+      <!-- Winter -->
+      <section id="winter" class="season winter" aria-labelledby="winter-title">
+        <canvas id="snow" aria-hidden="true"></canvas>
+        <div class="container season-inner">
+          <div class="season-intro">
+            <span class="eyebrow">Program</span>
+            <h1 id="winter-title">Winter Camp</h1>
+            <p class="season-tip">Move your mouse or finger through the snow.</p>
+            <button id="tilt-button" class="btn btn-light hidden" type="button">Tap to let the snow follow your phone</button>
+          </div>
+          <div class="season-card" id="winter-details"></div>
+        </div>
+      </section>
+
+      <!-- Summer -->
+      <section id="summer" class="season summer" aria-labelledby="summer-title">
+        <div class="sky" aria-hidden="true">
+          <div id="sun" class="sun">
+            <svg viewBox="0 0 200 200" width="100%" height="100%">
+              <g class="rays">
+                <g stroke="#fbaa1e" stroke-width="10" stroke-linecap="round">
+                  <line x1="100" y1="8" x2="100" y2="36"/><line x1="100" y1="164" x2="100" y2="192"/>
+                  <line x1="8" y1="100" x2="36" y2="100"/><line x1="164" y1="100" x2="192" y2="100"/>
+                  <line x1="35" y1="35" x2="55" y2="55"/><line x1="145" y1="145" x2="165" y2="165"/>
+                  <line x1="35" y1="165" x2="55" y2="145"/><line x1="145" y1="55" x2="165" y2="35"/>
+                </g>
+              </g>
+              <circle cx="100" cy="100" r="50" fill="#fbaa1e"/>
+              <circle cx="100" cy="100" r="40" fill="#f8b864"/>
+            </svg>
+          </div>
+          <div class="cloud c1"></div>
+          <div class="cloud c2"></div>
+          <div class="cloud c3"></div>
+        </div>
+        <div class="container season-inner">
+          <div class="season-intro">
+            <span class="eyebrow">Program</span>
+            <h2 id="summer-title" class="h1">Summer Camp</h2>
+          </div>
+          <div class="season-card" id="summer-details"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <img src="assets/img/logo-full.png" alt="Tiny Tribes Kids Camp" width="222" height="70" loading="lazy">
+          <p>Superkids Yarmouk, Kuwait</p>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <ul>
+            <li><a href="tel:+96560733303">+965 60733303</a></li>
+            <li><a href="https://instagram.com/tinytribescamp" target="_blank" rel="noopener">Instagram @tinytribescamp</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Pages</h3>
+          <ul>
+            <li><a href="gallery.html">Activities</a></li>
+            <li><a href="program.html">Programs</a></li>
+            <li><a href="register.html">Registration</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">© <span data-year>2026</span> Tiny Tribes Kids Camp. All rights reserved.</div>
+    </div>
+  </footer>
+
+</body>
+</html>

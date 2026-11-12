@@ -1,0 +1,221 @@
+/* ==========================================================
+   Tiny Tribes – dashboard styles
+   ========================================================== */
+body.dash { background: #f7f3ec; }
+
+.btn-sm { padding: .5rem 1rem; font-size: .88rem; }
+
+.dash-top {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .8rem 20px;
+  background: var(--white);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+.dash-top .brand img { height: 40px; width: auto; }
+.dash-title { font-weight: 800; color: var(--muted); margin-right: auto; }
+
+.demo-banner {
+  background: var(--cream);
+  border-bottom: 1px solid var(--line);
+  padding: .7rem 20px;
+  font-size: .9rem;
+}
+
+.dash-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  max-width: 1300px;
+  margin: 0 auto;
+  min-height: calc(100vh - 120px);
+}
+.dash-nav {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  padding: 1.5rem 1rem;
+  border-right: 1px solid var(--line);
+}
+.dash-nav button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: .75rem 1rem;
+  border-radius: 12px;
+  font: 600 .95rem var(--font-body);
+  color: var(--ink);
+  cursor: pointer;
+}
+.dash-nav button:hover { background: var(--white); }
+.dash-nav button[aria-pressed="true"] { background: var(--red); color: var(--white); }
+.count:empty { display: none; }
+.count {
+  background: var(--yellow);
+  color: var(--ink);
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 800;
+  padding: .1rem .5rem;
+}
+
+@media (max-width: 800px) {
+  .dash-layout { grid-template-columns: 1fr; }
+  .dash-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: .7rem 12px;
+  }
+  .dash-nav button { flex: none; white-space: nowrap; gap: .4rem; }
+}
+
+.dash-main { padding: 1.8rem 24px 3rem; min-width: 0; }
+.dash-main section.tab { padding: 0; }
+@media (max-width: 560px) { .dash-main { padding: 1.2rem 12px 2rem; } }
+.dash-main h1 { font-size: 1.8rem; }
+.dash-main h2 { font-size: 1.2rem; }
+.tab-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.tab-head h1 { margin: 0; }
+.tab-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+.dash-card {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 1.4rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .05);
+  margin-bottom: 1.2rem;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+@media (max-width: 900px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+.stat {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 1.2rem;
+  border-top: 5px solid var(--orange);
+}
+.stat:nth-child(2) { border-top-color: var(--red); }
+.stat:nth-child(3) { border-top-color: var(--yellow); }
+.stat:nth-child(4) { border-top-color: var(--coral); }
+.stat small { display: block; color: var(--muted); font-weight: 700; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
+.stat strong { font-size: 1.7rem; color: var(--ink); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; padding: 0; }
+.table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.table th, .table td { padding: .8rem 1rem; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+.table th { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); background: #fffaf0; white-space: nowrap; }
+.table td small { color: var(--muted); display: block; }
+.table select { font: inherit; padding: .3rem .4rem; border-radius: 8px; border: 1px solid var(--line); }
+.table .details td { background: #fffaf0; }
+.empty { color: var(--muted); padding: 1.2rem; margin: 0; }
+
+.status { font-weight: 700; font-size: .8rem; padding: .2rem .55rem; border-radius: 999px; background: var(--cream); white-space: nowrap; }
+.status.paid { background: #dff3e3; color: #1d6b31; }
+.status.cancelled { background: #f3e0e0; color: #8a1c1c; }
+
+.link-btn {
+  background: none;
+  border: 0;
+  color: var(--red);
+  font: 600 .85rem var(--font-body);
+  cursor: pointer;
+  padding: .2rem .3rem;
+  text-decoration: underline;
+}
+
+/* Messages */
+.message {
+  background: var(--white);
+  border-radius: 16px;
+  padding: 1.2rem 1.4rem;
+  margin-bottom: .8rem;
+  border-left: 5px solid var(--line);
+}
+.message.unread { border-left-color: var(--red); }
+.message-head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.message-head strong { font-size: 1.05rem; }
+.message-head small { color: var(--muted); }
+.message p { white-space: pre-wrap; margin: .6rem 0; }
+.message-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+
+/* Program editor */
+.program-editor h2 { display: flex; align-items: center; gap: .8rem; }
+.switch { display: inline-flex; align-items: center; gap: .5rem; font-weight: 600; font-size: .9rem; cursor: pointer; }
+.switch input { width: 18px; height: 18px; accent-color: var(--red); }
+.option-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 110px auto;
+  gap: .6rem;
+  align-items: end;
+  margin-bottom: .6rem;
+}
+@media (max-width: 640px) { .option-row { grid-template-columns: 1fr 1fr; } }
+.option-row .field label { font-size: .78rem; }
+.saved { color: #1d6b31; font-weight: 700; }
+
+/* Photos */
+.dash-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: .8rem;
+  margin-top: 1rem;
+}
+.dash-photo {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 1;
+  background: var(--line);
+}
+.dash-photo img { width: 100%; height: 100%; object-fit: cover; }
+.dash-photo .tools {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+}
+.dash-photo .tools button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, .92);
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--red);
+}
+.dash-photo.cover::after {
+  content: "Cover";
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  background: var(--yellow);
+  font-size: .72rem;
+  font-weight: 800;
+  padding: .15rem .5rem;
+  border-radius: 999px;
+}
+
+.reset-row { margin-top: 3rem; text-align: right; }

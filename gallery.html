@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Activities Gallery | Tiny Tribes Kids Camp</title>
+  <meta name="description" content="Photos from Tiny Tribes camp activities: field trips, splash day, carnival day, cooking, sports and indoor activities.">
+  <link rel="icon" href="assets/img/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/data.js" defer></script>
+  <script src="js/store.js" defer></script>
+  <script src="js/main.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <nav class="container nav" aria-label="Main">
+      <a class="brand" href="index.html"><img src="assets/img/logo-header.webp" alt="Tiny Tribes Kids Camp" width="163" height="52"></a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" id="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="gallery.html" aria-current="page">Activities</a></li>
+        <li><a href="program.html">Programs</a></li>
+        <li><a href="index.html#contact">Contact</a></li>
+        <li><a class="btn btn-primary" href="register.html">Register</a></li>
+      </ul>
+    </nav>
+  </header>
+
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="container">
+        <span class="eyebrow" style="color:var(--cream)">Gallery</span>
+        <h1 id="gallery-title">All activities</h1>
+        <p id="gallery-count"></p>
+      </div>
+    </section>
+    <div class="band" aria-hidden="true"></div>
+
+    <section id="gallery-page" style="padding-top:2rem">
+      <div class="container">
+        <div class="chips" id="gallery-tabs" role="toolbar" aria-label="Activity categories"></div>
+        <div class="photo-grid" id="gallery-grid"></div>
+      </div>
+    </section>
+
+    <dialog class="lightbox gallery-lightbox" id="lightbox" aria-label="Photo viewer">
+      <img src="" alt="">
+      <button class="lb-nav lb-prev" aria-label="Previous photo">‹</button>
+      <button class="lb-nav lb-next" aria-label="Next photo">›</button>
+      <div class="lightbox-bar">
+        <span class="lightbox-caption"></span>
+        <button class="lightbox-close" aria-label="Close">&times;</button>
+      </div>
+    </dialog>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <img src="assets/img/logo-full.png" alt="Tiny Tribes Kids Camp" width="222" height="70" loading="lazy">
+          <p>Superkids Yarmouk, Kuwait</p>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <ul>
+            <li><a href="tel:+96560733303">+965 60733303</a></li>
+            <li><a href="https://instagram.com/tinytribescamp" target="_blank" rel="noopener">Instagram @tinytribescamp</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Pages</h3>
+          <ul>
+            <li><a href="gallery.html">Activities</a></li>
+            <li><a href="program.html">Programs</a></li>
+            <li><a href="register.html">Registration</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">© <span data-year>2026</span> Tiny Tribes Kids Camp. All rights reserved.</div>
+    </div>
+  </footer>
+
+</body>
+</html>
