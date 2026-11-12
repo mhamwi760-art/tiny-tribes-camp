@@ -213,10 +213,31 @@ function initGallery() {
       .catch(() => {});
   }
 
+  /* ----- Zoom and pan inside the photo (the page itself never moves) ----- */
+  const view = { s: 1, x: 0, y: 0 };
+  function apply(animate) {
+    img.style.transition = animate ? "transform .2s ease" : "none";
+    img.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.s})`;
+  }
+  function clampPan() {
+    const r = img.getBoundingClientRect();
+    const w = r.width / view.s;
+    const h = r.height / view.s;
+    const maxX = (w * view.s - w) / 2;
+    const maxY = (h * view.s - h) / 2;
+    view.x = Math.max(-maxX, Math.min(maxX, view.x));
+    view.y = Math.max(-maxY, Math.min(maxY, view.y));
+  }
+  function resetZoom(animate) {
+    view.s = 1; view.x = 0; view.y = 0;
+    apply(animate);
+  }
+
   function show(i) {
     index = (i + list.length) % list.length;
     const { src, name } = list[index];
     const current = index;
+    resetZoom(false);
     img.alt = name;
     caption.textContent = `${name} · ${index + 1} / ${list.length}`;
     if (loaded.has(src)) {
@@ -229,46 +250,136 @@ function initGallery() {
     [1, -1, 2].forEach((d) => preload(list[(index + d + list.length) % list.length].src));
   }
 
+  function openViewer(i) {
+    show(i);
+    document.documentElement.classList.add("lb-open"); // lock the page behind
+    box.showModal();
+  }
+  function unlock() {
+    document.documentElement.classList.remove("lb-open");
+    resetZoom(false);
+  }
+  function closeViewer() {
+    if (box.open) box.close();
+    unlock();
+  }
+  box.addEventListener("close", unlock); // also covers the Esc key / phone back gesture
+
   grid.addEventListener("click", (e) => {
     const btn = e.target.closest(".photo");
     if (!btn) return;
-    show(Number(btn.dataset.index));
-    box.showModal();
+    openViewer(Number(btn.dataset.index));
   });
   $(".lb-prev", box).addEventListener("click", () => show(index - 1));
   $(".lb-next", box).addEventListener("click", () => show(index + 1));
-  $(".lightbox-close", box).addEventListener("click", () => box.close());
-  box.addEventListener("click", (e) => { if (e.target === box) box.close(); });
+  $(".lightbox-close", box).addEventListener("click", closeViewer);
+  box.addEventListener("click", (e) => { if (e.target === box && view.s === 1) closeViewer(); });
   box.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft") show(index - 1);
     if (e.key === "ArrowRight") show(index + 1);
   });
-  // Swipe left/right with ONE finger to change photo.
-  // Pinch-zoom (two fingers) or moving around a zoomed-in photo never changes it.
-  let swipe = null;
-  const zoomedIn = () => window.visualViewport && window.visualViewport.scale > 1.05;
-  box.addEventListener("touchstart", (e) => {
-    if (e.touches.length > 1 || zoomedIn()) {
-      swipe = null; // second finger down: this is a pinch, not a swipe
-      return;
+
+  // Gestures on the photo: one finger swipes (or pans when zoomed), two fingers pinch-zoom,
+  // double-tap zooms in and out. Mouse wheel zooms on a computer.
+  const pointers = new Map();
+  let gesture = null;
+  let lastTap = 0;
+
+  img.addEventListener("pointerdown", (e) => {
+    try { img.setPointerCapture(e.pointerId); } catch (err) { /* not needed for this pointer */ }
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      gesture = { type: "pinch", dist: Math.hypot(a.x - b.x, a.y - b.y), s: view.s };
+    } else if (pointers.size === 1) {
+      gesture = { type: "drag", x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, t: Date.now(), moved: false };
     }
-    swipe = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
-  }, { passive: true });
-  box.addEventListener("touchmove", (e) => {
-    if (e.touches.length > 1) swipe = null;
-  }, { passive: true });
-  box.addEventListener("touchend", (e) => {
-    if (!swipe || e.touches.length > 0 || zoomedIn()) {
-      if (e.touches.length === 0) swipe = null;
-      return;
-    }
-    const dx = e.changedTouches[0].clientX - swipe.x;
-    const dy = e.changedTouches[0].clientY - swipe.y;
-    const quick = Date.now() - swipe.t < 600;
-    swipe = null;
-    // Clearly sideways, long enough, and quick
-    if (quick && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) show(index + (dx < 0 ? 1 : -1));
   });
+
+  img.addEventListener("pointermove", (e) => {
+    if (!pointers.has(e.pointerId) || !gesture) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (gesture.type === "pinch" && pointers.size >= 2) {
+      const [a, b] = [...pointers.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      view.s = Math.max(1, Math.min(4, gesture.s * (d / gesture.dist)));
+      clampPan();
+      apply(false);
+    } else if (gesture.type === "drag") {
+      const dx = e.clientX - gesture.x;
+      const dy = e.clientY - gesture.y;
+      if (Math.abs(dx) + Math.abs(dy) > 6) gesture.moved = true;
+      if (view.s > 1) {
+        view.x = gesture.vx + dx;
+        view.y = gesture.vy + dy;
+        clampPan();
+        apply(false);
+      } else {
+        img.style.transition = "none";
+        img.style.transform = `translateX(${dx * 0.6}px)`; // follow the finger a little while swiping
+      }
+    }
+  });
+
+  function endPointer(e) {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    if (!gesture) return;
+
+    if (gesture.type === "pinch") {
+      if (pointers.size === 0) {
+        gesture = null;
+        if (view.s < 1.05) resetZoom(true);
+      }
+      return; // lifting one finger after a pinch never counts as a swipe
+    }
+
+    // single finger
+    const dx = e.clientX - gesture.x;
+    const dy = e.clientY - gesture.y;
+    const quick = Date.now() - gesture.t < 600;
+    const g = gesture;
+    gesture = null;
+
+    if (!g.moved) {
+      // tap on a phone: double-tap zooms in, or back out
+      if (e.pointerType === "mouse") return; // computers use double-click below
+      const now = Date.now();
+      if (now - lastTap < 300) {
+        if (view.s > 1) resetZoom(true);
+        else { view.s = 2.5; apply(true); }
+        lastTap = 0;
+      } else {
+        lastTap = now;
+      }
+      return;
+    }
+
+    if (view.s > 1) return; // was moving around a zoomed photo
+    if (quick && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      show(index + (dx < 0 ? 1 : -1));
+    } else {
+      apply(true); // snap back
+    }
+  }
+  img.addEventListener("pointerup", endPointer);
+  img.addEventListener("pointercancel", endPointer);
+
+  let lastType = "mouse";
+  img.addEventListener("pointerdown", (e) => (lastType = e.pointerType));
+  img.addEventListener("dblclick", (e) => {
+    e.preventDefault();
+    if (lastType !== "mouse") return; // phones handled by double-tap above
+    if (view.s > 1) resetZoom(true);
+    else { view.s = 2.5; apply(true); }
+  });
+  img.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    view.s = Math.max(1, Math.min(4, view.s * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    if (view.s === 1) { view.x = 0; view.y = 0; }
+    clampPan();
+    apply(false);
+  }, { passive: false });
 
   render();
 }
