@@ -884,7 +884,9 @@ legend {
 .photo:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
 
 .gallery-lightbox { background: #111; max-width: min(1000px, 96vw); }
-.gallery-lightbox img { max-height: 80vh; width: 100%; object-fit: contain; background: #111; }
+.gallery-lightbox img { height: min(78vh, 680px); width: 100%; object-fit: contain; background: #111; }
+.photo { content-visibility: auto; contain-intrinsic-size: 300px; }
+@media (hover: none) { .photo:hover img { transform: none; } }
 .gallery-lightbox .lightbox-bar { background: var(--white); }
 .lightbox-caption { font-weight: 700; color: var(--red); }
 .lb-nav {

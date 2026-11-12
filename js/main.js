@@ -201,11 +201,32 @@ function initGallery() {
   const caption = $(".lightbox-caption", box);
   let index = 0;
 
+  const loaded = new Set(); // full-size photos already downloaded
+
+  function preload(src) {
+    if (loaded.has(src)) return Promise.resolve();
+    const im = new Image();
+    im.decoding = "async";
+    im.src = src;
+    return (im.decode ? im.decode() : new Promise((r) => (im.onload = r)))
+      .then(() => loaded.add(src))
+      .catch(() => {});
+  }
+
   function show(i) {
     index = (i + list.length) % list.length;
-    img.src = list[index].src;
-    img.alt = list[index].name;
-    caption.textContent = `${list[index].name} · ${index + 1} / ${list.length}`;
+    const { src, name } = list[index];
+    const current = index;
+    img.alt = name;
+    caption.textContent = `${name} · ${index + 1} / ${list.length}`;
+    if (loaded.has(src)) {
+      img.src = src; // already downloaded: instant
+    } else {
+      img.src = thumb(src); // the small version is already on screen, show it straight away
+      preload(src).then(() => { if (index === current) img.src = src; });
+    }
+    // Get the next and previous photos ready in the background
+    [1, -1, 2].forEach((d) => preload(list[(index + d + list.length) % list.length].src));
   }
 
   grid.addEventListener("click", (e) => {
