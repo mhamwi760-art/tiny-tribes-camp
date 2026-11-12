@@ -758,7 +758,8 @@ legend {
   color: var(--ink);
   transition: transform .2s ease, box-shadow .2s ease;
 }
-.category:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(219, 33, 38, .16); }
+@media (hover: hover) { .category:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(219, 33, 38, .16); } }
+.category:active { transform: scale(.98); }
 .category:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
 .category img {
   width: 96px;
@@ -885,7 +886,6 @@ legend {
 
 .gallery-lightbox { background: #111; max-width: min(1000px, 96vw); }
 .gallery-lightbox img { height: min(78vh, 680px); width: 100%; object-fit: contain; background: #111; }
-.photo { content-visibility: auto; contain-intrinsic-size: 300px; }
 @media (hover: none) { .photo:hover img { transform: none; } }
 .gallery-lightbox .lightbox-bar { background: var(--white); }
 .lightbox-caption { font-weight: 700; color: var(--red); }
@@ -1149,3 +1149,14 @@ html.lb-open body { overflow: hidden; overscroll-behavior: none; }
 @media (max-width: 760px) {
   .gallery-lightbox img { height: auto; max-height: 62vh; }
 }
+
+/* Phones: no grey tap box, smooth photo grid */
+a, button, .chip, .category, .photo { -webkit-tap-highlight-color: transparent; }
+.chip { transition: background-color .2s ease, color .2s ease, border-color .2s ease, transform .1s ease; }
+.chip:active { transform: scale(.96); }
+.photo { background: #f6ead2; }
+.photo img { opacity: 0; transition: opacity .3s ease, transform .3s ease; }
+.photo img.ready { opacity: 1; }
+.photo-grid.fade-in { animation: grid-in .28s ease both; }
+@keyframes grid-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .photo-grid.fade-in { animation: none; } }

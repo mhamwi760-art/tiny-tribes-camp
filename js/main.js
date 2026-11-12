@@ -185,6 +185,16 @@ function initGallery() {
         </button>`
       )
       .join("");
+    // Fade each photo in once it has loaded (no empty box flashing)
+    $$("img", grid).forEach((im) => {
+      if (im.complete && im.naturalWidth) im.classList.add("ready");
+      else im.addEventListener("load", () => im.classList.add("ready"), { once: true });
+    });
+    grid.classList.remove("fade-in");
+    void grid.offsetWidth;
+    grid.classList.add("fade-in");
+    const active = $(`.chip[data-id="${current}"]`, tabs);
+    if (active) active.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
   }
 
   tabs.addEventListener("click", (e) => {
