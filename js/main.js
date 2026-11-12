@@ -771,7 +771,8 @@ function initHat() {
     if (url.pathname === location.pathname && url.search === location.search) return;
     e.preventDefault();
     loader.classList.add("show");
-    setTimeout(() => (location.href = url.href), 420);
+    try { sessionStorage.setItem("tt-hat", "1"); } catch (err) { /* ignore */ }
+    setTimeout(() => (location.href = url.href), 320);
   });
 
   // Coming back with the browser's Back button: hide the hat again
@@ -780,6 +781,10 @@ function initHat() {
 
 /* ---------- Start ---------- */
 document.addEventListener("DOMContentLoaded", () => {
+  // Safety net: the arriving hat always clears, even if animations are switched off
+  if (document.documentElement.classList.contains("hat-in")) {
+    setTimeout(() => document.documentElement.classList.remove("hat-in"), 650);
+  }
   initHat();
   initNav();
   initYear();

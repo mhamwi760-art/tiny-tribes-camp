@@ -22,10 +22,18 @@
   src: url("../assets/fonts/montserrat-latin.woff2") format("woff2");
 }
 
-/* Smooth cross-fade between pages in browsers that support it */
-@view-transition { navigation: auto; }
-::view-transition-old(root),
-::view-transition-new(root) { animation-duration: .35s; }
+/* Arriving from another page: the same hat is shown first, then gently fades away,
+   so the change of page is one smooth movement with no blank flash. */
+html.hat-in body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--cream) url("../assets/img/hat.svg") center 46% / 210px auto no-repeat;
+  pointer-events: none;
+  animation: hat-out .35s ease .08s forwards;
+}
+@keyframes hat-out { to { opacity: 0; visibility: hidden; } }
 
 /* ---------- Page-change hat (brand feathers) ---------- */
 .hat-loader {
@@ -170,8 +178,7 @@ h3 { font-size: 1.2rem; font-weight: 700; }
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(255, 255, 255, .96);
-  backdrop-filter: saturate(160%) blur(8px);
+  background: var(--white);
   border-bottom: 1px solid var(--line);
 }
 .nav {
@@ -200,22 +207,35 @@ h3 { font-size: 1.2rem; font-weight: 700; }
 .nav-links .btn,
 .nav-links .btn[aria-current="page"] { color: var(--white); padding: .6rem 1.3rem; }
 
+/* Menu button: three lines that turn smoothly into an X */
 .nav-toggle {
   display: none;
+  position: relative;
+  width: 44px;
+  height: 44px;
   background: none;
   border: 0;
-  padding: 8px;
+  padding: 0;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 .nav-toggle span {
-  display: block;
+  position: absolute;
+  left: 9px;
+  top: 50%;
   width: 26px;
   height: 3px;
-  margin: 5px 0;
+  margin-top: -1.5px;
   background: var(--red);
   border-radius: 2px;
-  transition: transform .2s ease, opacity .2s ease;
+  transition: transform .32s cubic-bezier(.65, 0, .35, 1), opacity .2s ease;
+  will-change: transform;
 }
+.nav-toggle span:nth-child(1) { transform: translateY(-8px); }
+.nav-toggle span:nth-child(3) { transform: translateY(8px); }
+.nav-toggle[aria-expanded="true"] span:nth-child(1) { transform: rotate(45deg); }
+.nav-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; transform: scaleX(.2); }
+.nav-toggle[aria-expanded="true"] span:nth-child(3) { transform: rotate(-45deg); }
 
 @media (max-width: 820px) {
   .nav-toggle { display: block; }
@@ -228,16 +248,25 @@ h3 { font-size: 1.2rem; font-weight: 700; }
     gap: 0;
     background: var(--white);
     border-bottom: 1px solid var(--line);
+    box-shadow: 0 14px 24px rgba(43, 29, 23, .08);
     padding: .5rem 20px 1.2rem;
-    display: none;
+    /* hidden but ready, so it can slide instead of popping */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    pointer-events: none;
+    transition: opacity .25s ease, transform .3s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .3s;
   }
-  .nav-links.open { display: flex; }
+  .nav-links.open {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    pointer-events: auto;
+    transition: opacity .25s ease, transform .3s cubic-bezier(.2, .8, .2, 1), visibility 0s;
+  }
   .nav-links li { width: 100%; }
   .nav-links a { display: block; padding: .8rem 0; }
   .nav-links .btn { margin-top: .5rem; width: 100%; }
-  .nav-toggle[aria-expanded="true"] span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
-  .nav-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
-  .nav-toggle[aria-expanded="true"] span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
 }
 
 /* ---------- Hero ---------- */
