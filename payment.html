@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payment | Tiny Tribes Kids Camp</title>
+  <meta name="description" content="Complete payment for your Tiny Tribes Winter Camp registration.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="assets/img/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/main.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <nav class="container nav" aria-label="Main">
+      <a class="brand" href="index.html"><img src="assets/img/logo-header.webp" alt="Tiny Tribes Kids Camp" width="163" height="52"></a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" id="nav-links">
+        <li><a href="index.html#activities">Activities</a></li>
+        <li><a href="index.html#camp">Winter Camp</a></li>
+        <li><a href="index.html#about">About</a></li>
+        <li><a href="index.html#contact">Contact</a></li>
+        <li><a class="btn btn-primary" href="register.html">Register</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="container">
+        <h1>Payment</h1>
+        <p>Review your registration and complete payment.</p>
+        <ol class="steps" aria-label="Progress">
+          <li class="done">Details</li>
+          <li class="active" aria-current="step">Payment</li>
+          <li>Confirmed</li>
+        </ol>
+      </div>
+    </section>
+    <div class="band" aria-hidden="true"></div>
+
+    <section style="padding-top:0" id="payment-page">
+      <div class="container">
+
+        <!-- Shown when there is no registration in this browser session -->
+        <div id="no-registration" class="card success hidden" style="margin-top:-40px">
+          <h2>No registration found</h2>
+          <p>Please fill in the registration form first, then you'll be brought back here to pay.</p>
+          <a class="btn btn-primary" href="register.html">Go to registration</a>
+        </div>
+
+        <!-- Payment form -->
+        <div id="payment-content" class="form-layout">
+          <form id="payment-form" class="card" novalidate>
+            <div class="notice"><strong>Demo mode:</strong> online payment isn't connected yet, so no money will be charged.</div>
+
+            <fieldset>
+              <legend>Payment method</legend>
+              <div class="pay-methods option-cards" style="grid-template-columns:1fr">
+                <div class="option-card pay-method">
+                  <input type="radio" name="method" id="m-knet" value="knet" checked>
+                  <label for="m-knet">
+                    <span><strong>KNET</strong><span class="meta">Kuwait debit cards</span></span>
+                    <span class="pay-badge">KNET</span>
+                  </label>
+                </div>
+                <div class="option-card pay-method">
+                  <input type="radio" name="method" id="m-card" value="card">
+                  <label for="m-card">
+                    <span><strong>Credit / debit card</strong><span class="meta">Visa, Mastercard</span></span>
+                    <span class="pay-badge" style="background:var(--orange)">CARD</span>
+                  </label>
+                </div>
+              </div>
+              <p class="hint" style="margin-top:1rem">You'll be taken to the secure payment page of the bank or payment provider to enter your card details. Tiny Tribes never sees or stores your card number.</p>
+            </fieldset>
+
+            <div class="field">
+              <label class="check">
+                <input type="checkbox" id="pay-consent" required>
+                <span>I confirm the registration details and the total amount. <span class="req">*</span></span>
+              </label>
+              <span class="error">Please confirm to continue.</span>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="margin-top:1rem;width:100%">Pay <span id="pay-button-amount"></span></button>
+            <p style="text-align:center;margin:1rem 0 0"><a href="register.html">← Edit registration</a></p>
+          </form>
+
+          <aside class="card summary" aria-labelledby="order-title">
+            <h2 id="order-title">Your registration</h2>
+            <div class="summary-row"><span>Reference</span><span class="ref" id="pay-reference"></span></div>
+            <div class="summary-row"><span>Parent</span><span id="pay-parent"></span></div>
+            <div class="summary-row"><span>Option</span><span id="pay-option"></span></div>
+            <p class="hint" style="margin:1rem 0 .2rem;font-weight:700">Children</p>
+            <div id="pay-children"></div>
+            <div class="summary-row"><span>Price</span><span id="pay-price"></span></div>
+            <div class="summary-total"><span>Total</span><span class="amount" id="pay-total"></span></div>
+          </aside>
+        </div>
+
+        <!-- Success -->
+        <div id="payment-success" class="card success hidden" style="margin-top:-40px" role="status">
+          <div class="success-icon" aria-hidden="true">✓</div>
+          <h2>You're all set!</h2>
+          <p>Thank you for registering with Tiny Tribes. Your reference is <span class="ref" id="success-reference"></span> for a total of <strong id="success-total"></strong>.</p>
+          <p class="hint">Demo mode: no payment was taken. We'll contact you on the number you provided.</p>
+          <a class="btn btn-primary" href="index.html">Back to home</a>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <img src="assets/img/logo-full.png" alt="Tiny Tribes Kids Camp" width="222" height="70" loading="lazy">
+          <p>Superkids Yarmouk, Kuwait</p>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <ul>
+            <li><a href="tel:+96560733303">+965 60733303</a></li>
+            <li><a href="https://instagram.com/tinytribescamp" target="_blank" rel="noopener">Instagram @tinytribescamp</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Pages</h3>
+          <ul>
+            <li><a href="index.html#activities">Activities</a></li>
+            <li><a href="register.html">Registration</a></li>
+            <li><a href="payment.html">Payment</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">© <span data-year>2026</span> Tiny Tribes Kids Camp. All rights reserved.</div>
+    </div>
+  </footer>
+</body>
+</html>

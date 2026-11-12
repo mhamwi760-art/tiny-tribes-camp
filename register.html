@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register | Tiny Tribes Kids Camp</title>
+  <meta name="description" content="Register your child for Tiny Tribes Winter Camp in Kuwait.">
+  <link rel="icon" href="assets/img/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/main.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <nav class="container nav" aria-label="Main">
+      <a class="brand" href="index.html"><img src="assets/img/logo-header.webp" alt="Tiny Tribes Kids Camp" width="163" height="52"></a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" id="nav-links">
+        <li><a href="index.html#activities">Activities</a></li>
+        <li><a href="index.html#camp">Winter Camp</a></li>
+        <li><a href="index.html#about">About</a></li>
+        <li><a href="index.html#contact">Contact</a></li>
+        <li><a class="btn btn-primary" href="register.html" aria-current="page">Register</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="container">
+        <h1>Winter Camp registration</h1>
+        <p>Dec 20 – Dec 31 · 4:00 – 7:00 PM · Sunday to Thursday</p>
+        <ol class="steps" aria-label="Progress">
+          <li class="active" aria-current="step">Details</li>
+          <li>Payment</li>
+          <li>Confirmed</li>
+        </ol>
+      </div>
+    </section>
+    <div class="band" aria-hidden="true"></div>
+
+    <section style="padding-top:0">
+      <div class="container form-layout">
+        <form id="registration-form" class="card" novalidate>
+          <fieldset>
+            <legend>Parent / guardian</legend>
+            <div class="grid-2">
+              <div class="field full">
+                <label for="parent-name">Full name <span class="req">*</span></label>
+                <input id="parent-name" name="parent-name" type="text" autocomplete="name" required>
+                <span class="error">Please enter your full name.</span>
+              </div>
+              <div class="field">
+                <label for="parent-phone">Mobile number <span class="req">*</span></label>
+                <input id="parent-phone" name="parent-phone" type="tel" autocomplete="tel" placeholder="+965" required>
+                <span class="error">Please enter a valid phone number.</span>
+              </div>
+              <div class="field">
+                <label for="parent-email">Email</label>
+                <input id="parent-email" name="parent-email" type="email" autocomplete="email">
+                <span class="error">Please enter a valid email address.</span>
+              </div>
+              <div class="field full">
+                <label for="emergency-phone">Emergency contact number <span class="req">*</span></label>
+                <input id="emergency-phone" name="emergency-phone" type="tel" placeholder="+965" required>
+                <span class="error">Please enter a valid phone number.</span>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Children</legend>
+            <div id="children"></div>
+            <button type="button" class="btn btn-secondary" id="add-child">+ Add another child</button>
+          </fieldset>
+
+          <fieldset>
+            <legend>Camp option</legend>
+            <div class="option-cards">
+              <div class="option-card">
+                <input type="radio" name="option" id="opt-1" value="1-week">
+                <label for="opt-1">
+                  <strong>1 Week</strong>
+                  <span class="meta">Week 1 · Dec 20 – 24</span>
+                  <span class="amount">KWD 80</span> <span class="meta" style="display:inline">per child</span>
+                </label>
+              </div>
+              <div class="option-card">
+                <input type="radio" name="option" id="opt-2" value="2-weeks">
+                <label for="opt-2">
+                  <strong>2 Weeks</strong>
+                  <span class="meta">Dec 20 – 31</span>
+                  <span class="amount">KWD 140</span> <span class="meta" style="display:inline">per child</span>
+                </label>
+              </div>
+            </div>
+            <p class="error hidden" id="option-error" style="color:var(--red);font-weight:600;font-size:.85rem">Please choose a camp option.</p>
+          </fieldset>
+
+          <div class="field">
+            <label class="check">
+              <input type="checkbox" id="consent" name="consent" required>
+              <span>I confirm the details above are correct and agree to be contacted by Tiny Tribes about this registration. <span class="req">*</span></span>
+            </label>
+            <span class="error">Please confirm to continue.</span>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="margin-top:1rem;width:100%">Continue to payment</button>
+        </form>
+
+        <aside class="card summary" aria-labelledby="summary-title">
+          <h2 id="summary-title">Summary</h2>
+          <div class="summary-row"><span>Option</span><span id="sum-option">—</span></div>
+          <div class="summary-row"><span>Children</span><span id="sum-children">1</span></div>
+          <div class="summary-row"><span>Price per child</span><span id="sum-price">—</span></div>
+          <div class="summary-total"><span>Total</span><span class="amount" id="sum-total">—</span></div>
+          <p class="hint" style="margin-top:1.2rem">Questions? Call <a href="tel:+96560733303">+965 60733303</a></p>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <!-- Template for each child; cloned by js/main.js -->
+  <template id="child-template">
+    <div class="child-block">
+      <h3>Child 1</h3>
+      <button type="button" class="remove-child">Remove</button>
+      <div class="grid-2">
+        <div class="field">
+          <label>Child's full name <span class="req">*</span></label>
+          <input type="text" data-name="child-name" required>
+          <span class="error">Please enter the child's name.</span>
+        </div>
+        <div class="field">
+          <label>Age group <span class="req">*</span></label>
+          <select data-name="child-age" required>
+            <option value="">Select age group</option>
+          </select>
+          <span class="error">Please choose an age group.</span>
+        </div>
+        <div class="field full">
+          <label>Allergies, medical or other notes</label>
+          <textarea data-name="child-notes" placeholder="Optional"></textarea>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <img src="assets/img/logo-full.png" alt="Tiny Tribes Kids Camp" width="222" height="70" loading="lazy">
+          <p>Superkids Yarmouk, Kuwait</p>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <ul>
+            <li><a href="tel:+96560733303">+965 60733303</a></li>
+            <li><a href="https://instagram.com/tinytribescamp" target="_blank" rel="noopener">Instagram @tinytribescamp</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Pages</h3>
+          <ul>
+            <li><a href="index.html#activities">Activities</a></li>
+            <li><a href="register.html">Registration</a></li>
+            <li><a href="payment.html">Payment</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">© <span data-year>2026</span> Tiny Tribes Kids Camp. All rights reserved.</div>
+    </div>
+  </footer>
+</body>
+</html>
