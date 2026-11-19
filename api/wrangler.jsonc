@@ -6,7 +6,7 @@
   "workers_dev": true,
   "vars": {
     // Websites allowed to call this backend
-    "ALLOWED_ORIGINS": "https://mhamwi760-art.github.io,http://localhost:8080,http://127.0.0.1:8080"
+    "ALLOWED_ORIGINS": "https://tiny-tribes.tinytribescamp.workers.dev,https://mhamwi760-art.github.io,http://localhost:8080,http://127.0.0.1:8080"
   },
   "d1_databases": [
     {

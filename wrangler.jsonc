@@ -1,0 +1,9 @@
+{
+  // The website and dashboard (static files), served by Cloudflare.
+  // Deploy from this folder with: npx wrangler deploy
+  // The backend is a separate Worker in api/ (deploy it from that folder).
+  "name": "tiny-tribes",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "assets": { "directory": ".", "html_handling": "auto-trailing-slash", "not_found_handling": "404-page" }
+}

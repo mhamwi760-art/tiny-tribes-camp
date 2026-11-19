@@ -25,5 +25,8 @@ Open the folder in VS Code, install the recommended **Live Server** extension, t
 - **Payment:** `payment.html` is a mock-up. Connecting KNET or cards needs a payment provider (for example Tap or MyFatoorah) and a small server to create the payment securely. The spot to change is marked `DEMO ONLY` in `js/main.js`.
 - **Dashboard data and login:** orders, messages, prices, photos, accounts, leave, payroll and history are saved online in a Cloudflare Worker with a D1 database (code in `api/`, live at `https://tiny-tribes-api.tinytribescamp.workers.dev`). Logins and permissions are checked by the server. The owner account is created once from a one-time link (`dashboard.html#setup=CODE`); the owner then adds employees in the dashboard. To update the backend: `cd api` then `npx wrangler deploy`. The table layout is in `api/schema.sql`.
 
-## Hosting on GitHub Pages
+## Hosting on Cloudflare
+The website and dashboard are served by Cloudflare at https://tiny-tribes.tinytribescamp.workers.dev (settings in `wrangler.jsonc`; files listed in `.assetsignore` are not published). To publish changes, run `npx wrangler deploy` in this folder. A custom domain can be added later in the Cloudflare dashboard (Workers & Pages → tiny-tribes → Domains).
+
+## Hosting on GitHub Pages (older copy)
 Push this folder to a GitHub repository, then go to the repository's **Settings → Pages** and pick the `main` branch and the `/ (root)` folder.
