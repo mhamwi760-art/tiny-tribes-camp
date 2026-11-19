@@ -1,49 +1,72 @@
 /* ==========================================================
    Tiny Tribes – data store
    One place that reads and saves content, orders and messages.
-
-   DEMO MODE: everything is kept in this browser (localStorage).
-   To go live, replace the bodies of the functions below with
-   calls to an online database (for example Supabase). The rest
-   of the site only talks to TTStore, so nothing else changes.
+   Everything is kept online (Cloudflare Worker + D1 database,
+   see the api/ folder). The rest of the site only talks to TTStore.
    ========================================================== */
 
 (function () {
-  const KEYS = {
-    content: "tt-content",
-    orders: "tt-orders",
-    messages: "tt-messages"
-  };
-
-  function read(key, fallback) {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch (e) {
-      return fallback;
-    }
-  }
-
-  function write(key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-      return true;
-    } catch (e) {
-      // Usually the browser storage is full (too many uploaded photos).
-      alert("Could not save: the browser storage is full. Remove some uploaded photos and try again.");
-      return false;
-    }
-  }
+  const API = "https://tiny-tribes-api.tinytribescamp.workers.dev";
+  const CACHE_KEY = "tt-live-content"; // last content seen, so pages still work if the network is slow
+  const TOKEN_KEY = "tt-admin-token";
 
   const clone = (o) => JSON.parse(JSON.stringify(o));
+  const safe = (fn, fallback) => {
+    try { return fn(); } catch (e) { return fallback; }
+  };
 
-  function makeId(prefix) {
-    const part = Math.random().toString(36).slice(2, 7).toUpperCase();
-    return `${prefix}-${Date.now().toString().slice(-5)}-${part}`;
+  function token() {
+    return safe(() => localStorage.getItem(TOKEN_KEY), null);
   }
 
+  async function call(path, { method = "GET", body, headers = {}, raw = false } = {}) {
+    const h = Object.assign({}, headers);
+    const t = token();
+    if (t) h.Authorization = `Bearer ${t}`;
+    if (body !== undefined && !raw) h["Content-Type"] = "application/json";
+    let res;
+    try {
+      res = await fetch(API + path, { method, headers: h, body: raw ? body : body === undefined ? undefined : JSON.stringify(body) });
+    } catch (e) {
+      throw Object.assign(new Error("Could not reach the server. Please check your internet and try again."), { status: 0 });
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 401 && t) {
+        safe(() => localStorage.removeItem(TOKEN_KEY));
+        window.dispatchEvent(new Event("tt-signed-out"));
+      }
+      throw Object.assign(new Error(data.error || "Something went wrong. Please try again."), { status: res.status });
+    }
+    return data;
+  }
+
+  let content = null;
+
+  function fromCache() {
+    const saved = safe(() => JSON.parse(localStorage.getItem(CACHE_KEY)), null);
+    return saved && saved.version === window.TT_DEFAULTS.version ? saved : null;
+  }
+
+  function useContent(c) {
+    content = c && c.version === window.TT_DEFAULTS.version ? c : clone(window.TT_DEFAULTS);
+    safe(() => localStorage.setItem(CACHE_KEY, JSON.stringify(content)));
+  }
+
+  // Load the live content once per page (falls back to the last copy after 4 seconds)
+  const ready = Promise.race([
+    call("/api/content").then((d) => useContent(d.content)),
+    new Promise((resolve) => setTimeout(resolve, 4000))
+  ])
+    .catch(() => {})
+    .then(() => {
+      if (!content) content = fromCache() || clone(window.TT_DEFAULTS);
+    });
+
   window.TTStore = {
-    mode: "demo",
+    mode: "live",
+    api: API,
+    ready,
 
     /* Small version of a site photo for tiles and grids (uploaded photos have none) */
     thumb(src) {
@@ -52,61 +75,85 @@
 
     /* ---------- Content (programs, prices, photos) ---------- */
     getContent() {
-      const saved = read(KEYS.content, null);
-      if (!saved) return clone(window.TT_DEFAULTS);
-      if (saved.version === 2) {
-        // Photos moved from .jpg to the lighter .webp format; keep the saved changes
-        saved.categories.forEach((c) => {
-          c.photos = c.photos.map((p) => (p.startsWith("assets/img/gallery/") ? p.replace(/\.jpg$/, ".webp") : p));
-        });
-        saved.version = 3;
-      }
-      if (saved.version === window.TT_DEFAULTS.version) return saved;
-      return clone(window.TT_DEFAULTS);
+      return clone(content || fromCache() || window.TT_DEFAULTS);
     },
-    saveContent(content) {
-      return write(KEYS.content, content);
+    async reloadContent() {
+      useContent((await call("/api/content")).content);
+      return this.getContent();
     },
-    resetContent() {
-      localStorage.removeItem(KEYS.content);
+    async saveContent(next) {
+      await call("/api/content", { method: "PUT", body: next });
+      useContent(next);
+    },
+    async uploadPhoto(blob) {
+      return (await call("/api/photos", { method: "POST", body: blob, raw: true, headers: { "Content-Type": blob.type } })).url;
     },
 
     /* ---------- Orders (registrations) ---------- */
-    getOrders() {
-      return read(KEYS.orders, []);
+    // Parents: returns { order, editToken }. The token lets them fix the order before paying.
+    async addOrder(order) {
+      return call("/api/orders", { method: "POST", body: order });
     },
-    addOrder(order) {
-      const orders = this.getOrders();
-      const full = Object.assign(
-        { id: makeId("TT"), createdAt: new Date().toISOString(), status: "Awaiting payment" },
-        order
-      );
-      orders.unshift(full);
-      write(KEYS.orders, orders);
-      return full;
+    async updateOwnOrder(id, editToken, changes) {
+      return (await call(`/api/orders/${encodeURIComponent(id)}`, { method: "PATCH", body: changes, headers: { "X-Edit-Token": editToken } })).order;
     },
-    updateOrder(id, changes) {
-      const orders = this.getOrders().map((o) => (o.id === id ? Object.assign(o, changes) : o));
-      write(KEYS.orders, orders);
+    // Dashboard
+    async getOrders() {
+      return (await call("/api/orders")).orders;
     },
-    deleteOrder(id) {
-      write(KEYS.orders, this.getOrders().filter((o) => o.id !== id));
+    async updateOrder(id, changes) {
+      return (await call(`/api/orders/${encodeURIComponent(id)}`, { method: "PATCH", body: changes })).order;
+    },
+    async deleteOrder(id) {
+      await call(`/api/orders/${encodeURIComponent(id)}`, { method: "DELETE" });
     },
 
     /* ---------- Messages (contact form) ---------- */
-    getMessages() {
-      return read(KEYS.messages, []);
+    async addMessage(msg) {
+      await call("/api/messages", { method: "POST", body: msg });
     },
-    addMessage(msg) {
-      const messages = this.getMessages();
-      messages.unshift(Object.assign({ id: makeId("MSG"), createdAt: new Date().toISOString(), read: false }, msg));
-      return write(KEYS.messages, messages);
+    async getMessages() {
+      return (await call("/api/messages")).messages;
     },
-    updateMessage(id, changes) {
-      write(KEYS.messages, this.getMessages().map((m) => (m.id === id ? Object.assign(m, changes) : m)));
+    async updateMessage(id, changes) {
+      await call(`/api/messages/${encodeURIComponent(id)}`, { method: "PATCH", body: changes });
     },
-    deleteMessage(id) {
-      write(KEYS.messages, this.getMessages().filter((m) => m.id !== id));
+    async deleteMessage(id) {
+      await call(`/api/messages/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+
+    /* ---------- Dashboard accounts ---------- */
+    isSignedIn() {
+      return !!token();
+    },
+    async signIn(email, password) {
+      const d = await call("/api/login", { method: "POST", body: { email, password } });
+      safe(() => localStorage.setItem(TOKEN_KEY, d.token));
+      return d.user;
+    },
+    async acceptInvite(code, name, email, password) {
+      const d = await call("/api/accept-invite", { method: "POST", body: { code, name, email, password } });
+      safe(() => localStorage.setItem(TOKEN_KEY, d.token));
+      return d.user;
+    },
+    async me() {
+      return (await call("/api/me")).user;
+    },
+    async signOut() {
+      try { await call("/api/logout", { method: "POST" }); } catch (e) { /* already signed out */ }
+      safe(() => localStorage.removeItem(TOKEN_KEY));
+    },
+    async changePassword(current, next) {
+      await call("/api/password", { method: "POST", body: { current, next } });
+    },
+    async getUsers() {
+      return call("/api/users");
+    },
+    async removeUser(id) {
+      await call(`/api/users/${id}`, { method: "DELETE" });
+    },
+    async createInvite() {
+      return call("/api/invites", { method: "POST" });
     }
   };
 })();

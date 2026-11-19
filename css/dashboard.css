@@ -219,3 +219,20 @@ body.dash { background: #f7f3ec; }
 }
 
 .reset-row { margin-top: 3rem; text-align: right; }
+
+/* ---------- Sign in ---------- */
+.auth-wrap {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - 70px);
+  padding: 2rem 16px;
+}
+.auth-card { width: 100%; max-width: 420px; }
+.auth-card h1 { margin-top: 0; }
+.auth-error { color: #b3261e; font-weight: 700; margin: .5rem 0 1rem; }
+.loading { opacity: .55; pointer-events: none; }
+
+/* ---------- Accounts ---------- */
+.invite-row { display: flex; gap: .5rem; }
+.invite-row input { flex: 1; min-width: 0; }
+#password-form { margin-top: 1.5rem; }

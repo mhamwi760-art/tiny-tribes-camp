@@ -1,7 +1,8 @@
 /* ==========================================================
    Tiny Tribes – dashboard
-   Orders, messages, programs & prices, and photos.
-   All reads and saves go through TTStore (js/store.js).
+   Orders, messages, programs & prices, photos and accounts.
+   All reads and saves go through TTStore (js/store.js), which
+   talks to the online backend. Only signed-in team members get in.
    ========================================================== */
 
 (function () {
@@ -9,9 +10,13 @@
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
   const esc = (s) =>
     String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const clone = (o) => JSON.parse(JSON.stringify(o));
 
   const store = window.TTStore;
   let content = store.getContent();
+  let orders = [];
+  let messages = [];
+
   const money = (n) => `${content.currency} ${Number(n || 0).toFixed(3)}`;
   const fmtDate = (iso) =>
     new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -19,6 +24,24 @@
   const STATUSES = ["Awaiting payment", "Paid", "Paid (demo)", "Cancelled"];
   const statusClass = (s) => (s.startsWith("Paid") ? "paid" : s === "Cancelled" ? "cancelled" : "");
   const phoneDigits = (p) => String(p || "").replace(/[^\d]/g, "");
+
+  // Run a save and show the problem if it fails. Returns true when it worked.
+  async function attempt(fn) {
+    document.body.classList.add("loading");
+    try {
+      await fn();
+      return true;
+    } catch (err) {
+      if (err.status !== 401) alert(err.message);
+      return false;
+    } finally {
+      document.body.classList.remove("loading");
+    }
+  }
+
+  async function loadAll() {
+    [orders, messages, content] = await Promise.all([store.getOrders(), store.getMessages(), store.reloadContent()]);
+  }
 
   /* ---------- Tabs ---------- */
   function showTab(name) {
@@ -35,20 +58,25 @@
 
   function render(name) {
     updateCounts();
-    ({ overview: renderOverview, orders: renderOrders, messages: renderMessages, programs: renderPrograms, photos: renderPhotos })[name]();
+    ({
+      overview: renderOverview,
+      orders: renderOrders,
+      messages: renderMessages,
+      programs: renderPrograms,
+      photos: renderPhotos,
+      accounts: renderAccounts
+    })[name]();
   }
 
   function updateCounts() {
-    const pending = store.getOrders().filter((o) => o.status === "Awaiting payment").length;
-    const unread = store.getMessages().filter((m) => !m.read).length;
+    const pending = orders.filter((o) => o.status === "Awaiting payment").length;
+    const unread = messages.filter((m) => !m.read).length;
     $("#count-orders").textContent = pending || "";
     $("#count-messages").textContent = unread || "";
   }
 
   /* ---------- Overview ---------- */
   function renderOverview() {
-    const orders = store.getOrders();
-    const messages = store.getMessages();
     const paid = orders.filter((o) => o.status.startsWith("Paid"));
     const children = paid.reduce((n, o) => n + o.children.length, 0);
     const stats = [
@@ -71,7 +99,6 @@
 
   /* ---------- Orders ---------- */
   function renderOrders() {
-    const orders = store.getOrders();
     const tbody = $("#orders-table tbody");
     $("#orders-empty").classList.toggle("hidden", orders.length > 0);
     tbody.innerHTML = orders
@@ -99,19 +126,28 @@
       .join("");
   }
 
-  $("#orders-table").addEventListener("change", (e) => {
+  $("#orders-table").addEventListener("change", async (e) => {
     if (!e.target.matches(".order-status")) return;
-    store.updateOrder(e.target.closest("tr").dataset.id, { status: e.target.value });
+    const id = e.target.closest("tr").dataset.id;
+    const status = e.target.value;
+    const o = orders.find((x) => x.id === id);
+    if (await attempt(() => store.updateOrder(id, { status }))) {
+      if (o) o.status = status;
+    } else if (o) {
+      e.target.value = o.status;
+    }
     updateCounts();
   });
-  $("#orders-table").addEventListener("click", (e) => {
+
+  $("#orders-table").addEventListener("click", async (e) => {
     const row = e.target.closest("tr");
     if (!row) return;
     if (e.target.matches(".toggle-details")) {
       $(`tr[data-for="${row.dataset.id}"]`).classList.toggle("hidden");
     }
     if (e.target.matches(".delete-order") && confirm("Delete this order? This cannot be undone.")) {
-      store.deleteOrder(row.dataset.id);
+      const id = row.dataset.id;
+      if (await attempt(() => store.deleteOrder(id))) orders = orders.filter((o) => o.id !== id);
       renderOrders();
       updateCounts();
     }
@@ -119,7 +155,7 @@
 
   $("#export-orders").addEventListener("click", () => {
     const rows = [["Date", "Reference", "Parent", "Phone", "Email", "Emergency", "Program", "Option", "Children", "Child names and ages", "Total", "Status"]];
-    store.getOrders().forEach((o) =>
+    orders.forEach((o) =>
       rows.push([
         o.createdAt, o.id, o.parent.name, o.parent.phone, o.parent.email, o.parent.emergency,
         o.programName, o.optionLabel, o.children.length,
@@ -135,7 +171,6 @@
 
   /* ---------- Messages ---------- */
   function renderMessages() {
-    const messages = store.getMessages();
     $("#messages-empty").classList.toggle("hidden", messages.length > 0);
     $("#messages-list").innerHTML = messages
       .map(
@@ -159,16 +194,16 @@
       .join("");
   }
 
-  $("#messages-list").addEventListener("click", (e) => {
+  $("#messages-list").addEventListener("click", async (e) => {
     const card = e.target.closest(".message");
     if (!card) return;
-    const id = card.dataset.id;
+    const m = messages.find((x) => x.id === card.dataset.id);
+    if (!m) return;
     if (e.target.matches(".toggle-read")) {
-      const m = store.getMessages().find((x) => x.id === id);
-      store.updateMessage(id, { read: !m.read });
+      if (await attempt(() => store.updateMessage(m.id, { read: !m.read }))) m.read = !m.read;
     } else if (e.target.matches(".delete-message")) {
       if (!confirm("Delete this message?")) return;
-      store.deleteMessage(id);
+      if (await attempt(() => store.deleteMessage(m.id))) messages = messages.filter((x) => x.id !== m.id);
     } else return;
     renderMessages();
     updateCounts();
@@ -186,7 +221,6 @@
   }
 
   function renderPrograms() {
-    content = store.getContent();
     $("#programs-saved").classList.add("hidden");
     $("#programs-editor").innerHTML = Object.entries(content.programs)
       .map(
@@ -218,8 +252,8 @@
     if (e.target.matches(".remove-option")) e.target.closest(".option-row").remove();
   });
 
-  $("#save-programs").addEventListener("click", () => {
-    const next = store.getContent();
+  $("#save-programs").addEventListener("click", async () => {
+    const next = clone(content);
     let problem = "";
     $$(".program-editor").forEach((card) => {
       const p = next.programs[card.dataset.program];
@@ -252,7 +286,7 @@
       alert(problem);
       return;
     }
-    if (store.saveContent(next)) {
+    if (await attempt(() => store.saveContent(next))) {
       content = next;
       renderPrograms();
       $("#programs-saved").classList.remove("hidden");
@@ -263,7 +297,6 @@
   let photoCat = null;
 
   function renderPhotos() {
-    content = store.getContent();
     if (!content.categories.some((c) => c.id === photoCat)) photoCat = content.categories[0]?.id;
     $("#photo-cats").innerHTML = content.categories
       .map((c) => `<button class="chip" data-id="${esc(c.id)}" aria-pressed="${c.id === photoCat}">${esc(c.name)} (${c.photos.length})</button>`)
@@ -274,7 +307,7 @@
           .map(
             (src, i) => `
         <div class="dash-photo ${i === 0 ? "cover" : ""}" data-index="${i}">
-          <img src="${esc(window.TTStore.thumb(src))}" alt="" loading="lazy">
+          <img src="${esc(store.thumb(src))}" alt="" loading="lazy">
           <div class="tools">
             ${i > 0 ? `<button class="make-cover" title="Make cover photo" aria-label="Make cover photo">★</button>` : ""}
             <button class="remove-photo" title="Remove photo" aria-label="Remove photo">✕</button>
@@ -292,11 +325,11 @@
     renderPhotos();
   });
 
-  function updateCategory(fn) {
-    const next = store.getContent();
-    const cat = next.categories.find((c) => c.id === photoCat);
-    fn(cat, next);
-    if (store.saveContent(next)) renderPhotos();
+  async function updateCategory(fn) {
+    const next = clone(content);
+    fn(next.categories.find((c) => c.id === photoCat));
+    if (await attempt(() => store.saveContent(next))) content = next;
+    renderPhotos();
   }
 
   $("#photo-grid").addEventListener("click", (e) => {
@@ -311,19 +344,20 @@
     }
   });
 
-  $("#add-category").addEventListener("click", () => {
+  $("#add-category").addEventListener("click", async () => {
     const name = prompt("Name of the new category (for example: Arts & Crafts)");
     if (!name || !name.trim()) return;
-    const next = store.getContent();
+    const next = clone(content);
     const id = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + Date.now().toString(36);
     next.categories.push({ id, name: name.trim(), photos: [] });
-    if (store.saveContent(next)) {
+    if (await attempt(() => store.saveContent(next))) {
+      content = next;
       photoCat = id;
       renderPhotos();
     }
   });
 
-  // Shrink photos before saving so the site stays fast
+  // Shrink photos before uploading so the site stays fast
   function resize(file, max = 1200, quality = 0.8) {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -334,7 +368,7 @@
         canvas.height = Math.round(img.height * scale);
         canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(img.src);
-        resolve(canvas.toDataURL("image/jpeg", quality));
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("resize failed"))), "image/jpeg", quality);
       };
       img.onerror = reject;
       img.src = URL.createObjectURL(file);
@@ -345,22 +379,163 @@
     const files = Array.from(e.target.files || []);
     if (!files.length || !photoCat) return;
     const urls = [];
+    document.body.classList.add("loading");
     for (const f of files) {
-      try { urls.push(await resize(f)); } catch (err) { alert(`Could not read ${f.name}.`); }
+      let blob;
+      try {
+        blob = await resize(f);
+      } catch (err) {
+        alert(`Could not read ${f.name}.`);
+        continue;
+      }
+      try {
+        urls.push(await store.uploadPhoto(blob));
+      } catch (err) {
+        alert(`Could not upload ${f.name}: ${err.message}`);
+      }
     }
-    updateCategory((cat) => cat.photos.push(...urls));
+    document.body.classList.remove("loading");
+    if (urls.length) await updateCategory((cat) => cat.photos.push(...urls));
     e.target.value = "";
   });
 
-  /* ---------- Reset ---------- */
-  $("#reset-demo").addEventListener("click", () => {
-    if (!confirm("Reset all demo data? This removes demo orders, messages, price changes and uploaded photos in this browser.")) return;
-    ["tt-content", "tt-orders", "tt-messages"].forEach((k) => localStorage.removeItem(k));
-    content = store.getContent();
-    showTab("overview");
+  /* ---------- Accounts ---------- */
+  async function renderAccounts() {
+    let data;
+    try {
+      data = await store.getUsers();
+    } catch (err) {
+      return;
+    }
+    $("#users-table tbody").innerHTML = data.users
+      .map(
+        (u) => `<tr data-id="${u.id}">
+          <td>${esc(u.name)}${u.id === data.me ? " <small>(you)</small>" : ""}</td>
+          <td>${esc(u.email)}</td>
+          <td>${fmtDate(u.createdAt)}</td>
+          <td>${u.id === data.me ? "" : `<button class="link-btn remove-user">Remove</button>`}</td>
+        </tr>`
+      )
+      .join("");
+  }
+
+  $("#users-table").addEventListener("click", async (e) => {
+    if (!e.target.matches(".remove-user")) return;
+    const row = e.target.closest("tr");
+    if (!confirm(`Remove ${row.children[1].textContent}? They will not be able to sign in any more.`)) return;
+    if (await attempt(() => store.removeUser(row.dataset.id))) renderAccounts();
   });
 
+  $("#new-invite").addEventListener("click", async () => {
+    let invite;
+    if (!(await attempt(async () => (invite = await store.createInvite())))) return;
+    const link = new URL("dashboard.html", location.href);
+    link.search = "";
+    link.hash = `invite=${invite.code}`;
+    $("#invite-link").value = link.href;
+    $("#invite-box").classList.remove("hidden");
+  });
+
+  $("#copy-invite").addEventListener("click", () => {
+    const input = $("#invite-link");
+    input.select();
+    if (navigator.clipboard) navigator.clipboard.writeText(input.value).catch(() => document.execCommand("copy"));
+    else document.execCommand("copy");
+    $("#copy-invite").textContent = "Copied";
+    setTimeout(() => ($("#copy-invite").textContent = "Copy"), 1500);
+  });
+
+  $("#password-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const next = $("#pw-next").value;
+    if (next.length < 10) return alert("Please use a new password with at least 10 characters.");
+    if (await attempt(() => store.changePassword($("#pw-current").value, next))) {
+      form.reset();
+      $("#pw-saved").classList.remove("hidden");
+    }
+  });
+
+  /* ---------- Sign in ---------- */
+  const TABS = ["overview", "orders", "messages", "programs", "photos", "accounts"];
+
+  function showAuth(which) {
+    $("#dash").classList.add("hidden");
+    $("#sign-out").classList.add("hidden");
+    $("#auth").classList.remove("hidden");
+    $("#login-form").classList.toggle("hidden", which !== "login");
+    $("#invite-form").classList.toggle("hidden", which !== "invite");
+    $(which === "login" ? "#login-email" : "#invite-name").focus();
+  }
+
+  async function openDashboard() {
+    try {
+      await loadAll();
+    } catch (err) {
+      if (err.status !== 401) alert(err.message);
+      showAuth("login");
+      return;
+    }
+    $("#auth").classList.add("hidden");
+    $("#dash").classList.remove("hidden");
+    $("#sign-out").classList.remove("hidden");
+    const start = location.hash.slice(1);
+    showTab(TABS.includes(start) ? start : "overview");
+  }
+
+  function authError(form, message) {
+    const p = $(".auth-error", form);
+    p.textContent = message;
+    p.classList.toggle("hidden", !message);
+  }
+
+  async function submitAuth(form, fn) {
+    authError(form, "");
+    const btn = $("button[type=submit]", form);
+    btn.disabled = true;
+    try {
+      await fn();
+      form.reset();
+      await openDashboard();
+    } catch (err) {
+      authError(form, err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  $("#login-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    submitAuth(e.target, () => store.signIn($("#login-email").value.trim(), $("#login-password").value));
+  });
+
+  // An invite link looks like dashboard.html#invite=CODE
+  let inviteCode = (location.hash.match(/^#invite=([0-9a-f]+)$/) || [])[1] || "";
+
+  $("#invite-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const password = $("#invite-password").value;
+    if (password !== $("#invite-password2").value) return authError(form, "The two passwords are not the same.");
+    if (password.length < 10) return authError(form, "Please use a password with at least 10 characters.");
+    submitAuth(form, async () => {
+      await store.acceptInvite(inviteCode, $("#invite-name").value.trim(), $("#invite-email").value.trim(), password);
+      inviteCode = "";
+      history.replaceState(null, "", location.pathname);
+    });
+  });
+
+  $("#sign-out").addEventListener("click", async () => {
+    await store.signOut();
+    orders = [];
+    messages = [];
+    showAuth("login");
+  });
+
+  window.addEventListener("tt-signed-out", () => showAuth("login"));
+
   /* ---------- Start ---------- */
-  const start = location.hash.slice(1);
-  showTab(["overview", "orders", "messages", "programs", "photos"].includes(start) ? start : "overview");
+  if (inviteCode) showAuth("invite");
+  else if (store.isSignedIn()) openDashboard();
+  else showAuth("login");
 })();

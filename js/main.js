@@ -15,7 +15,7 @@ function esc(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-const content = window.TTStore.getContent();
+let content = window.TTStore.getContent(); // replaced with the live copy once it has loaded
 const money = (n) => `${content.currency} ${Number(n).toFixed(3)}`;
 const shortMoney = (n) => `${content.currency} ${Number(n)}`;
 const thumb = (src) => window.TTStore.thumb(src);
@@ -136,17 +136,25 @@ function initProgramTeasers() {
 function initContactForm() {
   const form = $("#contact-form");
   if (!form) return;
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!validateForm(form)) return;
-    window.TTStore.addMessage({
-      name: form.elements["c-name"].value.trim(),
-      phone: form.elements["c-phone"].value.trim(),
-      email: form.elements["c-email"].value.trim(),
-      message: form.elements["c-message"].value.trim()
-    });
-    form.reset();
-    $("#contact-sent").classList.remove("hidden");
+    const btn = $("button[type=submit]", form);
+    btn.disabled = true;
+    try {
+      await window.TTStore.addMessage({
+        name: form.elements["c-name"].value.trim(),
+        phone: form.elements["c-phone"].value.trim(),
+        email: form.elements["c-email"].value.trim(),
+        message: form.elements["c-message"].value.trim()
+      });
+      form.reset();
+      $("#contact-sent").classList.remove("hidden");
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
+    }
   });
 }
 
@@ -607,7 +615,7 @@ function initRegistration() {
   form.addEventListener("change", updateSummary);
   liveValidation(form);
 
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const option = currentOption();
     $("#option-error").classList.toggle("hidden", !!option);
@@ -639,14 +647,28 @@ function initRegistration() {
       total: option.price * children.length
     };
 
-    // Update the same order if the parent came back to edit it
-    if (draft && draft.id && window.TTStore.getOrders().some((o) => o.id === draft.id)) {
-      window.TTStore.updateOrder(draft.id, order);
-      saveDraft(Object.assign({ id: draft.id }, order));
-    } else {
-      saveDraft(window.TTStore.addOrder(order));
+    const btn = $("button[type=submit]", form);
+    btn.disabled = true;
+    try {
+      // Update the same order if the parent came back to edit it
+      let saved = null;
+      if (draft && draft.id && draft.editToken) {
+        try {
+          saved = Object.assign(await window.TTStore.updateOwnOrder(draft.id, draft.editToken, order), { editToken: draft.editToken });
+        } catch (err) {
+          if (![403, 404, 409].includes(err.status)) throw err; // otherwise start a new order
+        }
+      }
+      if (!saved) {
+        const res = await window.TTStore.addOrder(order);
+        saved = Object.assign(res.order, { editToken: res.editToken });
+      }
+      saveDraft(saved);
+      window.location.href = "payment.html";
+    } catch (err) {
+      alert(err.message);
+      btn.disabled = false;
     }
-    window.location.href = "payment.html";
   });
 
   // Start state: saved draft, or link from program page, or defaults
@@ -713,9 +735,16 @@ function initPayment() {
        (for example KNET via Tap or MyFatoorah): send the amount
        to your server, create a payment, then redirect to the
        provider's hosted payment page. */
-    setTimeout(() => {
+    setTimeout(async () => {
       const method = $('input[name="method"]:checked', form).value.toUpperCase();
-      window.TTStore.updateOrder(reg.id, { status: "Paid (demo)", method, paidAt: new Date().toISOString() });
+      try {
+        await window.TTStore.updateOwnOrder(reg.id, reg.editToken, { status: "Paid (demo)", method });
+      } catch (err) {
+        alert(err.message);
+        btn.disabled = false;
+        btn.innerHTML = `Pay <span id="pay-button-amount">${money(reg.total)}</span>`;
+        return;
+      }
       $("#payment-content").classList.add("hidden");
       $("#payment-success").classList.remove("hidden");
       $("#success-reference").textContent = reg.id;
@@ -788,6 +817,13 @@ document.addEventListener("DOMContentLoaded", () => {
   initHat();
   initNav();
   initYear();
+  initRest();
+});
+
+// Parts that show programs, prices or photos wait for the live content
+async function initRest() {
+  await window.TTStore.ready;
+  content = window.TTStore.getContent();
   initFacts();
   initCategories();
   initProgramTeasers();
@@ -797,4 +833,4 @@ document.addEventListener("DOMContentLoaded", () => {
   initRegistration();
   initPayment();
   initReveal();
-});
+}

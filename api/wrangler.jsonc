@@ -1,0 +1,18 @@
+{
+  // Tiny Tribes backend: dashboard login, orders, messages, content and photos.
+  "name": "tiny-tribes-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "vars": {
+    // Websites allowed to call this backend
+    "ALLOWED_ORIGINS": "https://mhamwi760-art.github.io,http://localhost:8080,http://127.0.0.1:8080"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tiny-tribes-db",
+      "database_id": "9c3209ae-4612-488c-980a-35ef38630f22"
+    }
+  ]
+}
