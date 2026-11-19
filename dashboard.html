@@ -7,50 +7,93 @@
   <meta name="robots" content="noindex, nofollow">
   <link rel="icon" href="assets/img/favicon.png">
   <link rel="preload" href="assets/fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/style.css?v=17">
-  <link rel="stylesheet" href="css/dashboard.css?v=17">
-  <script src="js/data.js?v=17" defer></script>
-  <script src="js/store.js?v=17" defer></script>
-  <script src="js/dashboard.js?v=17" defer></script>
+  <link rel="stylesheet" href="css/style.css?v=20">
+  <link rel="stylesheet" href="css/dashboard.css?v=30">
+  <script src="js/data.js?v=20" defer></script>
+  <script src="js/store.js?v=20" defer></script>
+  <script src="js/excel.js?v=24" defer></script>
+  <script src="js/dashboard.js?v=30" defer></script>
 </head>
-<body class="dash">
+<body class="dash locked">
   <header class="dash-top">
     <a href="index.html" class="brand"><img src="assets/img/logo.png" alt="Tiny Tribes" width="170" height="32"></a>
     <span class="dash-title">Dashboard</span>
+    <span class="who hidden" id="who"></span>
+    <button class="btn btn-secondary btn-sm hidden" id="my-password">Change my password</button>
+    <button class="btn btn-secondary btn-sm hidden" id="logout">Log out</button>
     <a class="btn btn-secondary btn-sm" href="index.html" target="_blank" rel="noopener">View site ↗</a>
-    <button class="btn btn-secondary btn-sm hidden" id="sign-out">Sign out</button>
   </header>
 
-  <!-- Sign in / create account -->
-  <div class="auth-wrap hidden" id="auth">
-    <form class="dash-card auth-card" id="login-form" novalidate>
-      <h1>Sign in</h1>
-      <p class="hint">Dashboard for the Tiny Tribes team.</p>
-      <div class="field"><label for="login-email">Email</label><input id="login-email" type="email" autocomplete="username" required></div>
-      <div class="field"><label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" required></div>
-      <p class="auth-error hidden" role="alert"></p>
-      <button type="submit" class="btn btn-primary" style="width:100%">Sign in</button>
-    </form>
-    <form class="dash-card auth-card hidden" id="invite-form" novalidate>
-      <h1>Create your account</h1>
-      <p class="hint">Choose the email and password you will use to sign in to the dashboard.</p>
-      <div class="field"><label for="invite-name">Your name</label><input id="invite-name" autocomplete="name" required></div>
-      <div class="field"><label for="invite-email">Email</label><input id="invite-email" type="email" autocomplete="username" required></div>
-      <div class="field"><label for="invite-password">Password (at least 10 characters)</label><input id="invite-password" type="password" autocomplete="new-password" minlength="10" required></div>
-      <div class="field"><label for="invite-password2">Type the password again</label><input id="invite-password2" type="password" autocomplete="new-password" required></div>
-      <p class="auth-error hidden" role="alert"></p>
-      <button type="submit" class="btn btn-primary" style="width:100%">Create account</button>
-    </form>
-  </div>
+  <p class="hint" id="dash-loading" style="text-align:center;margin:4rem 16px">Loading…</p>
 
-  <div class="dash-layout hidden" id="dash">
+  <!-- First visit: create the owner account -->
+  <section class="auth hidden" id="setup">
+    <form class="dash-card auth-card" id="setup-form" novalidate>
+      <h1>Create the owner account</h1>
+      <p class="hint">This is your own login. The owner can do everything and creates the employee logins. This page works only once.</p>
+      <div class="field"><label for="s-name">Your name</label><input id="s-name" required autocomplete="name"></div>
+      <div class="field"><label for="s-user">Username</label><input id="s-user" required autocomplete="username" autocapitalize="none"></div>
+      <div class="field"><label for="s-pass">Password (at least 6 characters)</label><input id="s-pass" type="password" required autocomplete="new-password"></div>
+      <div class="field"><label for="s-pass2">Repeat password</label><input id="s-pass2" type="password" required autocomplete="new-password"></div>
+      <p class="form-error hidden" id="setup-error" role="alert"></p>
+      <button class="btn btn-primary" type="submit">Create owner account</button>
+    </form>
+  </section>
+
+  <!-- Login -->
+  <section class="auth hidden" id="login">
+    <form class="dash-card auth-card" id="login-form" novalidate>
+      <h1>Log in</h1>
+      <div class="field"><label for="l-user">Username</label><input id="l-user" required autocomplete="username" autocapitalize="none"></div>
+      <div class="field"><label for="l-pass">Password</label><input id="l-pass" type="password" required autocomplete="current-password"></div>
+      <p class="form-error hidden" id="login-error" role="alert"></p>
+      <button class="btn btn-primary" type="submit">Log in</button>
+    </form>
+  </section>
+
+  <div class="dash-layout hidden" id="app">
     <nav class="dash-nav" aria-label="Dashboard sections">
       <button data-tab="overview" aria-pressed="true">Overview</button>
-      <button data-tab="orders">Orders <span class="count" id="count-orders"></span></button>
-      <button data-tab="messages">Messages <span class="count" id="count-messages"></span></button>
-      <button data-tab="programs">Programs &amp; prices</button>
-      <button data-tab="photos">Photos</button>
-      <button data-tab="accounts">Accounts</button>
+
+      <div class="nav-group" data-group="orders">
+        <button class="nav-head" aria-expanded="true"><span>🧾 Orders</span><span class="count group-count"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="nav-items">
+          <button data-tab="orders" data-need="orders.view">All orders <span class="count" id="count-orders"></span></button>
+          <button data-tab="cancelled" data-need="orders.view">Cancelled <span class="count" id="count-cancelled"></span></button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="customers">
+        <button class="nav-head" aria-expanded="true"><span>💬 Customers</span><span class="count group-count"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="nav-items">
+          <button data-tab="messages" data-need="messages.view">Messages <span class="count" id="count-messages"></span></button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="website">
+        <button class="nav-head" aria-expanded="true"><span>🌐 Website</span><span class="count group-count"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="nav-items">
+          <button data-tab="programs" data-need="programs.edit">Programs &amp; prices</button>
+          <button data-tab="photos" data-need="photos.edit">Photos</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="team">
+        <button class="nav-head" aria-expanded="true"><span>👥 Team</span><span class="count group-count"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="nav-items">
+          <button data-tab="employees" data-need="owner">Employees</button>
+          <button data-tab="hr" data-need="owner">HR</button>
+          <button data-tab="requests" data-need="hr.approve">Leave requests <span class="count" id="count-requests"></span></button>
+          <button data-tab="myleave" data-need="staff">My leave</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-group="records">
+        <button class="nav-head" aria-expanded="true"><span>📜 Records</span><span class="count group-count"></span><span class="chev" aria-hidden="true"></span></button>
+        <div class="nav-items">
+          <button data-tab="history" data-need="history.view">History</button>
+        </div>
+      </div>
     </nav>
 
     <main class="dash-main" id="main">
@@ -58,17 +101,42 @@
       <section class="tab" id="tab-overview">
         <h1>Overview</h1>
         <div class="stats" id="stats"></div>
-        <div class="dash-card">
+        <div class="dash-card" data-need="orders.view">
           <h2>Latest orders</h2>
           <div id="latest-orders"></div>
         </div>
+        <p class="hint" id="overview-note"></p>
       </section>
 
       <!-- Orders -->
       <section class="tab hidden" id="tab-orders">
         <div class="tab-head">
           <h1>Orders</h1>
-          <button class="btn btn-secondary btn-sm" id="export-orders">Download CSV</button>
+          <div class="tab-actions">
+            <button class="btn btn-primary btn-sm" id="add-test-order" data-need="orders.test">+ Create test order</button>
+            <button class="btn btn-secondary btn-sm" id="export-orders" data-need="orders.export">Download Excel</button>
+          </div>
+        </div>
+        <div class="dash-card filters" id="order-filters">
+          <div class="field search-field">
+            <label for="f-search">Search</label>
+            <input type="search" id="f-search" placeholder="Name, order number, phone, email, child, notes…" autocomplete="off">
+          </div>
+          <div class="filter-grid">
+            <div class="field"><label for="f-status">Status</label><select id="f-status"></select></div>
+            <div class="field"><label for="f-program">Program</label><select id="f-program"></select></div>
+            <div class="field"><label for="f-option">Option / week</label><select id="f-option"></select></div>
+            <div class="field"><label for="f-age">Child age</label><select id="f-age"></select></div>
+            <div class="field"><label for="f-from">From date</label><input type="date" id="f-from"></div>
+            <div class="field"><label for="f-to">To date</label><input type="date" id="f-to"></div>
+            <div class="field"><label for="f-type">Order type</label>
+              <select id="f-type"><option value="">All orders</option><option value="real">Real orders only</option><option value="test">Test orders only</option></select>
+            </div>
+          </div>
+          <div class="filter-foot">
+            <span id="orders-shown" role="status"></span>
+            <button class="link-btn" id="clear-filters">Clear filters</button>
+          </div>
         </div>
         <div class="dash-card table-wrap">
           <table class="table" id="orders-table">
@@ -78,14 +146,43 @@
             <tbody></tbody>
           </table>
           <p class="empty hidden" id="orders-empty">No orders yet. They appear here when a parent registers on the site.</p>
+          <p class="empty hidden" id="orders-nomatch">No orders match your search or filters.</p>
         </div>
+      </section>
+
+      <!-- Cancelled orders -->
+      <section class="tab hidden" id="tab-cancelled">
+        <div class="tab-head">
+          <h1>Cancelled orders</h1>
+          <button class="btn btn-secondary btn-sm" id="export-cancelled" data-need="orders.export">Download Excel</button>
+        </div>
+        <div class="dash-card filters" id="cancel-filters">
+          <div class="filter-grid cancel-grid">
+            <div class="field search-field"><label for="c-search">Search</label>
+              <input type="search" id="c-search" placeholder="Name, order number, phone, reason…" autocomplete="off">
+            </div>
+            <div class="field"><label for="c-refund">Refund</label>
+              <select id="c-refund"><option value="">All</option><option value="no">Not refunded</option><option value="yes">Refunded</option></select>
+            </div>
+          </div>
+          <div class="filter-foot"><span id="cancelled-shown" role="status"></span></div>
+        </div>
+        <div id="cancelled-list"></div>
+        <p class="empty hidden" id="cancelled-empty">No cancelled orders. To cancel an order, press <strong>Cancel</strong> next to it in Orders.</p>
+        <p class="empty hidden" id="cancelled-nomatch">No cancelled orders match your search.</p>
       </section>
 
       <!-- Messages -->
       <section class="tab hidden" id="tab-messages">
-        <h1>Messages</h1>
+        <div class="tab-head">
+          <h1>Messages</h1>
+          <div class="chips" id="message-box">
+            <button class="chip" data-box="inbox" aria-pressed="true">Inbox</button>
+            <button class="chip" data-box="archived" aria-pressed="false">Archived</button>
+          </div>
+        </div>
         <div id="messages-list"></div>
-        <p class="empty hidden" id="messages-empty">No messages yet. They appear here when someone uses the contact form on the home page.</p>
+        <p class="empty hidden" id="messages-empty">No messages here. New messages appear when someone uses the contact form on the home page.</p>
       </section>
 
       <!-- Programs & prices -->
@@ -109,34 +206,191 @@
           </div>
         </div>
         <div class="chips" id="photo-cats"></div>
-        <p class="hint">The first photo is the category cover on the home page. Use ★ to make a photo the cover.</p>
+        <p class="hint">The first photo is the category cover on the home page. Use ★ to make a photo the cover. Hidden photos stay saved below and can be put back.</p>
         <div class="dash-photos" id="photo-grid"></div>
+        <div id="hidden-photos-wrap" class="hidden">
+          <h2 class="sub-head">Hidden photos</h2>
+          <div class="dash-photos" id="hidden-photos"></div>
+        </div>
       </section>
 
-      <!-- Accounts -->
-      <section class="tab hidden" id="tab-accounts">
-        <div class="tab-head">
-          <h1>Accounts</h1>
-          <button class="btn btn-primary btn-sm" id="new-invite">+ Invite a team member</button>
-        </div>
-        <div class="dash-card invite-box hidden" id="invite-box">
-          <p><strong>Send this link to the person you want to add.</strong> It works once and expires in 7 days. They choose their own password.</p>
-          <div class="invite-row"><input id="invite-link" readonly><button class="btn btn-secondary btn-sm" id="copy-invite">Copy</button></div>
+      <!-- History -->
+      <section class="tab hidden" id="tab-history">
+        <h1>History</h1>
+        <div class="dash-card filters" id="history-filters">
+          <div class="filter-grid">
+            <div class="field search-field"><label for="h-search">Search</label>
+              <input type="search" id="h-search" placeholder="Order number, name, what changed…" autocomplete="off">
+            </div>
+            <div class="field"><label for="h-who">Person</label><select id="h-who"></select></div>
+            <div class="field"><label for="h-area">Section</label><select id="h-area"></select></div>
+            <div class="field"><label for="h-from">From date</label><input type="date" id="h-from"></div>
+            <div class="field"><label for="h-to">To date</label><input type="date" id="h-to"></div>
+          </div>
+          <div class="filter-foot"><span id="history-shown" role="status"></span></div>
         </div>
         <div class="dash-card table-wrap">
-          <table class="table" id="users-table">
-            <thead><tr><th>Name</th><th>Email</th><th>Since</th><th></th></tr></thead>
+          <table class="table" id="history-table">
+            <thead><tr><th>When</th><th>Who</th><th>Section</th><th>Item</th><th>What happened</th><th>From</th><th>To</th></tr></thead>
             <tbody></tbody>
           </table>
+          <p class="empty hidden" id="history-empty">Nothing recorded yet.</p>
         </div>
-        <form class="dash-card" id="password-form" novalidate>
-          <h2>Change my password</h2>
-          <div class="grid-2">
-            <div class="field"><label for="pw-current">Current password</label><input id="pw-current" type="password" autocomplete="current-password" required></div>
-            <div class="field"><label for="pw-next">New password (at least 10 characters)</label><input id="pw-next" type="password" autocomplete="new-password" minlength="10" required></div>
+      </section>
+
+      <!-- HR (owner only), split into 4 parts -->
+      <section class="tab hidden" id="tab-hr">
+        <h1>HR</h1>
+        <p class="empty hidden" id="hr-empty">No employees yet. Add them in the Employees tab first.</p>
+        <div id="hr-content">
+          <div class="hr-nav" aria-label="HR sections">
+            <button class="hr-tab" data-view="today" aria-pressed="true"><span class="hr-ico" aria-hidden="true">🕘</span><strong>Attendance</strong><small id="hr-sum-today"></small></button>
+            <button class="hr-tab" data-view="staff" aria-pressed="false"><span class="hr-ico" aria-hidden="true">👤</span><strong>Staff &amp; salary</strong><small id="hr-sum-staff"></small></button>
+            <button class="hr-tab" data-view="leave" aria-pressed="false"><span class="hr-ico" aria-hidden="true">🌴</span><strong>Leave</strong><small id="hr-sum-leave"></small></button>
+            <button class="hr-tab" data-view="payroll" aria-pressed="false"><span class="hr-ico" aria-hidden="true">💰</span><strong>Payroll</strong><small id="hr-sum-payroll"></small></button>
           </div>
-          <button type="submit" class="btn btn-primary btn-sm">Change password</button>
-          <p class="saved hidden" id="pw-saved" role="status">Password changed. Other devices were signed out.</p>
+
+          <!-- Attendance -->
+          <div class="hr-view" data-view="today">
+            <div class="dash-card table-wrap">
+              <h2 class="card-title">Who logged in today</h2>
+              <table class="table" id="hr-today">
+                <thead><tr><th>Employee</th><th>Status</th><th>First login</th><th>Last login</th><th>Last logout</th><th>Logins</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Staff & salary -->
+          <div class="hr-view hidden" data-view="staff">
+            <div class="dash-card table-wrap">
+              <h2 class="card-title">Job and monthly salary</h2>
+              <table class="table" id="hr-staff">
+                <thead><tr><th>Employee</th><th>Job title</th><th>Start date</th><th>Monthly salary</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Leave -->
+          <div class="hr-view hidden" data-view="leave">
+            <p class="hr-alert hidden" id="hr-pending-note"></p>
+            <div class="dash-card table-wrap">
+              <h2 class="card-title">Leave balances <small>(<span id="hr-year"></span>)</small></h2>
+              <table class="table" id="hr-balances">
+                <thead><tr><th>Employee</th><th>Annual leave</th><th>Sick leave</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="dash-card table-wrap">
+              <div class="tab-head card-title">
+                <h2>All leave and requests</h2>
+                <select id="hr-leave-filter" aria-label="Show">
+                  <option value="">All</option>
+                  <option value="pending">Waiting for approval</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <table class="table" id="hr-leave">
+                <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Note</th><th>Added</th><th>Status</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+              <p class="empty" id="hr-leave-empty">No leave yet. Employees can request it in their <strong>My leave</strong> tab, or use <strong>Add leave</strong> in the balances above.</p>
+            </div>
+          </div>
+
+          <!-- Payroll -->
+          <div class="hr-view hidden" data-view="payroll">
+            <div class="dash-card table-wrap">
+              <div class="tab-head card-title">
+                <h2>Payroll</h2>
+                <div class="tab-actions">
+                  <label class="refund-pick" for="pay-month">Month <input type="month" id="pay-month"></label>
+                  <button class="btn btn-secondary btn-sm" id="pay-excel">Download Excel</button>
+                </div>
+              </div>
+              <table class="table" id="hr-payroll">
+                <thead><tr><th>Employee</th><th>Monthly salary</th><th>Bonus</th><th>Deduction</th><th>Note</th><th>Net to pay</th><th>Status</th></tr></thead>
+                <tbody></tbody>
+              </table>
+              <p class="filter-foot pad" id="pay-total"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Leave requests (owner and approvers) -->
+      <section class="tab hidden" id="tab-requests">
+        <h1>Leave requests</h1>
+        <div id="requests-list"></div>
+        <p class="empty hidden" id="requests-empty">No requests waiting. 🎉</p>
+        <div class="dash-card table-wrap">
+          <h2 class="card-title">Recently decided</h2>
+          <table class="table" id="requests-done">
+            <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Note</th><th>Asked</th><th>Decision</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="empty" id="requests-done-empty">Nothing decided yet.</p>
+        </div>
+      </section>
+
+      <!-- My leave (each employee) -->
+      <section class="tab hidden" id="tab-myleave">
+        <h1>My leave</h1>
+        <div class="stats two" id="my-balances"></div>
+        <form class="dash-card" id="request-form" novalidate>
+          <h2>Request leave</h2>
+          <div class="grid-2">
+            <div class="field"><label for="rq-type">Type</label><select id="rq-type"><option value="annual">Annual leave (day off)</option><option value="sick">Sick leave</option></select></div>
+            <div class="field"><label for="rq-note">Note (optional)</label><input id="rq-note" placeholder="e.g. family event, feeling sick"></div>
+            <div class="field"><label for="rq-from">From</label><input id="rq-from" type="date"></div>
+            <div class="field"><label for="rq-to">To (same day for one day)</label><input id="rq-to" type="date"></div>
+          </div>
+          <p class="hint">Only Sunday to Thursday are counted. Your request goes to the owner or a manager to approve.</p>
+          <p class="form-error hidden" id="request-error" role="alert"></p>
+          <button class="btn btn-primary btn-sm" type="submit">Send request</button>
+          <span class="saved hidden" id="request-sent" role="status">Request sent.</span>
+        </form>
+        <div class="dash-card table-wrap">
+          <h2 class="card-title">My requests and leave</h2>
+          <table class="table" id="my-leave">
+            <thead><tr><th>Type</th><th>Dates</th><th>Days</th><th>Note</th><th>Asked</th><th>Status</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="empty" id="my-leave-empty">No requests yet.</p>
+        </div>
+      </section>
+
+      <!-- Employees (owner only) -->
+      <section class="tab hidden" id="tab-employees">
+        <h1>Employees</h1>
+        <form class="dash-card" id="employee-form" novalidate>
+          <h2 id="employee-form-title">Add an employee</h2>
+          <input type="hidden" id="e-id">
+          <div class="grid-2">
+            <div class="field"><label for="e-name">Name</label><input id="e-name" required autocomplete="off"></div>
+            <div class="field"><label for="e-user">Username</label><input id="e-user" required autocomplete="off" autocapitalize="none"></div>
+            <div class="field"><label for="e-pass" id="e-pass-label">Password (at least 6 characters)</label><input id="e-pass" type="text" autocomplete="off"></div>
+          </div>
+          <h3 class="perm-title">What can this employee do?</h3>
+          <div class="perm-grid" id="perm-grid"></div>
+          <p class="form-error hidden" id="employee-error" role="alert"></p>
+          <div class="cancel-actions">
+            <button class="btn btn-primary btn-sm" type="submit" id="employee-save">Add employee</button>
+            <button class="link-btn hidden" type="button" id="employee-cancel">Stop editing</button>
+          </div>
+        </form>
+        <div id="employee-list"></div>
+
+        <form class="dash-card danger-card" id="reset-form" novalidate>
+          <h2>Start fresh</h2>
+          <p>Clears all orders, cancelled orders, messages, history, leave and payroll for everyone. <strong>Accounts and their job and salary details are kept.</strong></p>
+          <label class="perm"><input type="checkbox" id="reset-content"> Also put programs, prices and photos back to the original</label>
+          <div class="field"><label for="reset-word">Type <strong>RESET</strong> to confirm</label><input id="reset-word" autocomplete="off" autocapitalize="characters"></div>
+          <p class="form-error hidden" id="reset-error" role="alert"></p>
+          <button class="btn btn-primary btn-sm" type="submit">Clear dashboard data</button>
         </form>
       </section>
     </main>

@@ -7,28 +7,33 @@
      POST  /api/orders             new registration -> { order, editToken }
      PATCH /api/orders/:id         parent edits own order (X-Edit-Token)
      POST  /api/messages           contact form
+     GET   /api/status             { hasOwner }
 
-   Dashboard (needs "Authorization: Bearer <token>"):
-     POST  /api/login              { email, password } -> { token, user }
-     POST  /api/accept-invite      { code, name, email, password } -> { token, user }
-     GET   /api/me   POST /api/logout   POST /api/password
-     GET   /api/orders   PATCH/DELETE /api/orders/:id
-     GET   /api/messages PATCH/DELETE /api/messages/:id
-     PUT   /api/content  POST /api/photos
-     GET   /api/users    DELETE /api/users/:id   POST /api/invites
+   Dashboard:
+     POST  /api/setup              { code, name, username, password } (first owner, one-time code)
+     POST  /api/login              { username, password } -> { token, user }
+   Needs "Authorization: Bearer <token>":
+     POST  /api/logout   POST /api/password { current, next }
+     GET   /api/all                everything this person may see
+     PUT   /api/items/:coll/:id    save one order, message, leave or payroll record
+     POST  /api/history            add a history line (who and when are set here)
+     PUT   /api/users/:id          owner: add or change an employee
+     PUT   /api/content  POST /api/photos  POST /api/reset
+
+   Permissions are checked here, not only in the browser.
    ========================================================== */
 
-const SESSION_DAYS = 30;
-const INVITE_DAYS = 7;
-const MAX_FAILS = 5; // wrong passwords allowed per email ...
+const SESSION_HOURS = 12;
+const MAX_FAILS = 5; // wrong passwords allowed per username ...
 const FAIL_WINDOW_MIN = 15; // ... in this many minutes
 const PBKDF2_ITERATIONS = 100000;
-const STATUSES = ["Awaiting payment", "Paid", "Paid (demo)", "Cancelled"];
+const MIN_PASSWORD = 6;
+const HISTORY_LIMIT = 5000;
+const ORDER_PERMS = ["orders.status", "orders.cancel", "orders.restore", "orders.refund", "orders.test"];
 
 /* ---------- small helpers ---------- */
 const enc = new TextEncoder();
 const now = () => new Date().toISOString();
-const addDays = (d) => new Date(Date.now() + d * 864e5).toISOString();
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 const randomHex = (bytes = 32) => hex(crypto.getRandomValues(new Uint8Array(bytes)));
 const sha256 = async (s) => hex(await crypto.subtle.digest("SHA-256", enc.encode(s)));
@@ -36,8 +41,7 @@ const sha256 = async (s) => hex(await crypto.subtle.digest("SHA-256", enc.encode
 function makeId(prefix) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const r = crypto.getRandomValues(new Uint8Array(5));
-  const part = [...r].map((b) => chars[b % chars.length]).join("");
-  return `${prefix}-${Date.now().toString().slice(-5)}-${part}`;
+  return `${prefix}-${Date.now().toString().slice(-5)}-${[...r].map((b) => chars[b % chars.length]).join("")}`;
 }
 
 async function hashPassword(password, saltHex) {
@@ -65,7 +69,7 @@ const fail = (status, message) => {
 };
 
 function text(v, max, label, required = true) {
-  const s = typeof v === "string" ? v.trim() : "";
+  const s = typeof v === "string" ? v.trim() : v == null ? "" : String(v).trim();
   if (required && !s) fail(400, `Please fill in ${label}.`);
   if (s.length > max) fail(400, `${label} is too long.`);
   return s;
@@ -82,14 +86,14 @@ async function body(request, maxBytes = 200000) {
 }
 
 function checkPassword(p) {
-  if (typeof p !== "string" || p.length < 10) fail(400, "Please use a password with at least 10 characters.");
+  if (typeof p !== "string" || p.length < MIN_PASSWORD) fail(400, `The password needs at least ${MIN_PASSWORD} characters.`);
   if (p.length > 200) fail(400, "That password is too long.");
   return p;
 }
 
-function checkEmail(e) {
-  const s = text(e, 200, "your email").toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) fail(400, "Please enter a valid email.");
+function checkUsername(u) {
+  const s = String(u || "").trim().toLowerCase();
+  if (!/^[a-z0-9._-]{3,40}$/.test(s)) fail(400, "Username: at least 3 letters or numbers, no spaces.");
   return s;
 }
 
@@ -108,13 +112,20 @@ function corsHeaders(request, env) {
 }
 
 const json = (data, status = 200, extra = {}) =>
-  new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", ...extra } });
+  new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...extra } });
 
-/* ---------- sessions ---------- */
+/* ---------- accounts ---------- */
+function userFromRow(row) {
+  return Object.assign(JSON.parse(row.data), { id: row.id, username: row.username });
+}
+
+const can = (u, perm) => !!u && (u.role === "owner" || (perm !== "owner" && (u.perms || []).includes(perm)));
+const canAny = (u, perms) => perms.some((p) => can(u, p));
+
 async function startSession(env, userId) {
   const token = randomHex(32);
   await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
-    .bind(await sha256(token), userId, now(), addDays(SESSION_DAYS))
+    .bind(await sha256(token), userId, now(), new Date(Date.now() + SESSION_HOURS * 36e5).toISOString())
     .run();
   return token;
 }
@@ -123,23 +134,52 @@ async function currentUser(request, env) {
   const auth = request.headers.get("Authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
   if (!token) return null;
+  const tokenHash = await sha256(token);
   const row = await env.DB.prepare(
-    "SELECT u.id, u.email, u.name, s.token_hash FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?"
+    "SELECT a.id, a.username, a.data FROM sessions s JOIN accounts a ON a.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?"
   )
-    .bind(await sha256(token), now())
+    .bind(tokenHash, now())
     .first();
-  return row || null;
-}
-
-async function requireUser(request, env) {
-  const user = await currentUser(request, env);
-  if (!user) fail(401, "Please sign in again.");
+  if (!row) return null;
+  const user = userFromRow(row);
+  if (!user.active) return null;
+  user.tokenHash = tokenHash;
   return user;
 }
 
-const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name });
+/* What one person may see about another (salaries only for the owner and yourself) */
+function userOut(u, viewer) {
+  const out = { id: u.id, username: u.username, name: u.name, role: u.role, perms: u.perms || [], active: !!u.active, createdAt: u.createdAt, createdBy: u.createdBy };
+  if (u.hr) {
+    if (viewer.role === "owner" || viewer.id === u.id) out.hr = u.hr;
+    else out.hr = { job: u.hr.job, annual: u.hr.annual, sick: u.hr.sick };
+  }
+  return out;
+}
 
-/* ---------- content ---------- */
+/* ---------- history ---------- */
+function historyRow(entry, by) {
+  const h = {
+    id: makeId("H"),
+    at: now(),
+    by: by ? by.name : "Website",
+    byId: by ? by.id : "website",
+    area: text(entry.area, 40, "area"),
+    target: text(entry.target, 200, "target", false),
+    action: text(entry.action, 600, "action"),
+    from: text(entry.from, 2000, "from", false),
+    to: text(entry.to, 2000, "to", false)
+  };
+  if (entry.photo) h.photo = text(entry.photo, 300, "photo", false);
+  return h;
+}
+
+function logStmt(env, entry, by) {
+  const h = historyRow(entry, by);
+  return env.DB.prepare("INSERT INTO items (coll, id, data, updated_at) VALUES ('history', ?, ?, ?)").bind(h.id, JSON.stringify(h), h.at);
+}
+
+/* ---------- content and orders ---------- */
 async function getContent(env) {
   const row = await env.DB.prepare("SELECT data FROM content WHERE key = 'site'").first();
   return row ? JSON.parse(row.data) : null;
@@ -161,12 +201,13 @@ async function buildOrder(env, input) {
     age: text(c.age, 40, "the child's age"),
     notes: text(c.notes, 1000, "notes", false)
   }));
+  const price = Number(option.price) || 0;
   return {
     programId: input.programId,
     programName: program.name,
     optionId: option.id,
     optionLabel: `${option.label} (${option.dates})`,
-    unitPrice: Number(option.price) || 0,
+    unitPrice: price,
     parent: {
       name: text(p.name, 100, "the parent's name"),
       phone: text(p.phone, 40, "the phone number"),
@@ -174,24 +215,44 @@ async function buildOrder(env, input) {
       emergency: text(p.emergency, 40, "the emergency phone")
     },
     children,
-    total: (Number(option.price) || 0) * children.length
+    total: price * children.length
   };
 }
 
-async function loadOrder(env, id) {
-  const row = await env.DB.prepare("SELECT id, edit_hash, created_at, data FROM orders WHERE id = ?").bind(id).first();
-  if (!row) fail(404, "Order not found.");
-  return row;
+const childText = (o) => `${o.parent.name} · ${o.programName} · ${o.children.length} ${o.children.length === 1 ? "child" : "children"}`;
+
+async function getItem(env, coll, id) {
+  const row = await env.DB.prepare("SELECT data, secret FROM items WHERE coll = ? AND id = ?").bind(coll, id).first();
+  return row ? { data: JSON.parse(row.data), secret: row.secret } : null;
 }
 
-const orderOut = (row) => Object.assign(JSON.parse(row.data), { id: row.id, createdAt: row.created_at });
-const messageOut = (row) => Object.assign(JSON.parse(row.data), { id: row.id, createdAt: row.created_at });
+async function listItems(env, coll, sortKey, limit = 100000) {
+  const { results } = await env.DB.prepare(
+    `SELECT data FROM items WHERE coll = ? ORDER BY json_extract(data, '$.${sortKey}') DESC LIMIT ?`
+  )
+    .bind(coll, limit)
+    .all();
+  return results.map((r) => JSON.parse(r.data));
+}
+
+/* May this person save this record? */
+function mayWrite(user, coll, next, existing) {
+  if (user.role === "owner") return true;
+  if (coll === "orders") return existing ? canAny(user, ORDER_PERMS) : can(user, "orders.test") && next.test === true;
+  if (coll === "messages") return !!existing && can(user, "messages.manage");
+  if (coll === "leave") {
+    if (can(user, "hr.approve")) return true;
+    if (next.userId !== user.id || (existing && existing.userId !== user.id)) return false;
+    if (next.status === "pending" && (!existing || existing.status === "pending") && !next.cancelled) return true;
+    return !!existing && next.cancelled === true; // cancelling your own leave
+  }
+  return false; // payroll: owner only
+}
 
 /* ---------- routes ---------- */
 async function route(request, env, url) {
-  const { pathname } = url;
   const method = request.method;
-  const parts = pathname.split("/").filter(Boolean); // e.g. ["api","orders","TT-1"]
+  const parts = url.pathname.split("/").filter(Boolean); // e.g. ["api","orders","TT-1"]
 
   /* Photos */
   if (method === "GET" && parts[0] === "photos" && parts[1]) {
@@ -206,164 +267,249 @@ async function route(request, env, url) {
   const what = parts[1];
   const id = parts[2];
 
-  /* ----- public ----- */
-  if (what === "content" && method === "GET") {
-    return json({ content: await getContent(env) }, 200, { "Cache-Control": "no-store" });
+  /* ===== public ===== */
+  if (what === "content" && method === "GET") return json({ content: await getContent(env) });
+
+  if (what === "status" && method === "GET") {
+    const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM accounts").first();
+    return json({ hasOwner: row.n > 0 });
   }
 
   if (what === "orders" && method === "POST" && !id) {
     const order = await buildOrder(env, await body(request));
-    order.status = "Awaiting payment";
-    const orderId = makeId("TT");
     const editToken = randomHex(24);
-    const created = now();
-    await env.DB.prepare("INSERT INTO orders (id, edit_hash, created_at, data) VALUES (?, ?, ?, ?)")
-      .bind(orderId, await sha256(editToken), created, JSON.stringify(order))
-      .run();
-    return json({ order: Object.assign(order, { id: orderId, createdAt: created }), editToken }, 201);
+    Object.assign(order, { id: makeId("TT"), createdAt: now(), status: "Awaiting payment" });
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO items (coll, id, data, secret, updated_at) VALUES ('orders', ?, ?, ?, ?)").bind(order.id, JSON.stringify(order), await sha256(editToken), now()),
+      logStmt(env, { area: "Order", target: order.id, action: "New registration", to: childText(order) })
+    ]);
+    return json({ order, editToken }, 201);
+  }
+
+  // A parent changing their own order (only before it is paid)
+  if (what === "orders" && method === "PATCH" && id) {
+    const item = await getItem(env, "orders", id);
+    const tokenHash = await sha256(request.headers.get("X-Edit-Token") || "");
+    if (!item || !item.secret || !sameText(tokenHash, item.secret)) fail(403, "You cannot change this order.");
+    const current = item.data;
+    if (current.status !== "Awaiting payment") fail(409, "This order can no longer be changed.");
+    const b = await body(request);
+    let next;
+    let entry;
+    if (b.status === "Paid (demo)") {
+      // Payments are still a demo: this only marks the order, no money is taken.
+      const m = text(b.method, 20, "method", false);
+      next = Object.assign(current, { status: "Paid (demo)", method: m, paidAt: now() });
+      entry = { area: "Order", target: id, action: "Status changed", from: "Awaiting payment", to: `Paid (demo) by ${m}` };
+    } else {
+      next = Object.assign(await buildOrder(env, b), { id, createdAt: current.createdAt, status: "Awaiting payment" });
+      entry = { area: "Order", target: id, action: "Parent edited registration", to: childText(next) };
+    }
+    await env.DB.batch([
+      env.DB.prepare("UPDATE items SET data = ?, updated_at = ? WHERE coll = 'orders' AND id = ?").bind(JSON.stringify(next), now(), id),
+      logStmt(env, entry)
+    ]);
+    return json({ order: next });
   }
 
   if (what === "messages" && method === "POST" && !id) {
     const b = await body(request, 20000);
     const msg = {
+      id: makeId("MSG"),
+      createdAt: now(),
+      read: false,
       name: text(b.name, 100, "your name"),
       phone: text(b.phone, 40, "your phone"),
       email: text(b.email, 200, "your email", false),
-      message: text(b.message, 3000, "your message"),
-      read: false
+      message: text(b.message, 3000, "your message")
     };
-    await env.DB.prepare("INSERT INTO messages (id, created_at, data) VALUES (?, ?, ?)")
-      .bind(makeId("MSG"), now(), JSON.stringify(msg))
-      .run();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO items (coll, id, data, updated_at) VALUES ('messages', ?, ?, ?)").bind(msg.id, JSON.stringify(msg), now()),
+      logStmt(env, { area: "Message", target: msg.id, action: "New message from the contact form", to: msg.name })
+    ]);
     return json({ ok: true }, 201);
   }
 
-  // A parent editing their own order (only before it is paid)
-  if (what === "orders" && method === "PATCH" && id && request.headers.get("X-Edit-Token")) {
-    const row = await loadOrder(env, id);
-    if (!sameText(await sha256(request.headers.get("X-Edit-Token")), row.edit_hash)) fail(403, "You cannot change this order.");
-    const current = JSON.parse(row.data);
-    if (current.status !== "Awaiting payment") fail(409, "This order can no longer be changed.");
-    const b = await body(request);
-    let next;
-    if (b.status === "Paid (demo)") {
-      // Payments are still a demo: this only marks the order, no money is taken.
-      next = Object.assign(current, { status: "Paid (demo)", method: text(b.method, 20, "method", false), paidAt: now() });
-    } else {
-      next = Object.assign(await buildOrder(env, b), { status: "Awaiting payment" });
-    }
-    await env.DB.prepare("UPDATE orders SET data = ? WHERE id = ?").bind(JSON.stringify(next), id).run();
-    return json({ order: Object.assign(next, { id, createdAt: row.created_at }) });
-  }
-
-  /* ----- signing in ----- */
-  if (what === "login" && method === "POST") {
-    const b = await body(request, 5000);
-    const email = String(b.email || "").trim().toLowerCase();
-    const password = String(b.password || "");
-    const since = new Date(Date.now() - FAIL_WINDOW_MIN * 60000).toISOString();
-    const fails = await env.DB.prepare("SELECT COUNT(*) AS n FROM login_fails WHERE email = ? AND at > ?").bind(email, since).first();
-    if (fails.n >= MAX_FAILS) fail(429, `Too many wrong tries. Please wait ${FAIL_WINDOW_MIN} minutes and try again.`);
-    const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
-    const hash = await hashPassword(password, user ? user.pass_salt : "00".repeat(16));
-    if (!user || !sameText(hash, user.pass_hash)) {
-      await env.DB.batch([
-        env.DB.prepare("INSERT INTO login_fails (email, at) VALUES (?, ?)").bind(email, now()),
-        env.DB.prepare("DELETE FROM login_fails WHERE at < ?").bind(new Date(Date.now() - 864e5).toISOString())
-      ]);
-      fail(401, "Wrong email or password.");
-    }
-    await env.DB.prepare("DELETE FROM login_fails WHERE email = ?").bind(email).run();
-    return json({ token: await startSession(env, user.id), user: publicUser(user) });
-  }
-
-  if (what === "accept-invite" && method === "POST") {
+  /* ===== logging in ===== */
+  if (what === "setup" && method === "POST") {
     const b = await body(request, 5000);
     const codeHash = await sha256(String(b.code || ""));
     const invite = await env.DB.prepare("SELECT * FROM invites WHERE code_hash = ? AND expires_at > ?").bind(codeHash, now()).first();
-    if (!invite) fail(400, "This invite link is not valid or has expired. Please ask for a new one.");
-    const email = checkEmail(b.email);
+    if (!invite) fail(400, "This setup link is not valid or has expired.");
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM accounts").first();
+    if (count.n > 0) fail(409, "The owner account already exists. Please log in.");
     const name = text(b.name, 100, "your name");
-    const password = checkPassword(b.password);
-    const taken = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
-    if (taken) fail(409, "An account with this email already exists. Please sign in instead.");
+    const username = checkUsername(b.username);
     const salt = randomHex(16);
-    const result = await env.DB.prepare("INSERT INTO users (email, name, pass_hash, pass_salt, created_at) VALUES (?, ?, ?, ?, ?)")
-      .bind(email, name, await hashPassword(password, salt), salt, now())
-      .run();
-    await env.DB.prepare("DELETE FROM invites WHERE code_hash = ?").bind(codeHash).run();
-    const userId = result.meta.last_row_id;
-    return json({ token: await startSession(env, userId), user: { id: userId, email, name } }, 201);
+    const owner = { id: makeId("U"), name, role: "owner", perms: [], active: true, createdAt: now() };
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO accounts (id, username, pass_hash, pass_salt, data) VALUES (?, ?, ?, ?, ?)")
+        .bind(owner.id, username, await hashPassword(checkPassword(b.password), salt), salt, JSON.stringify(owner)),
+      env.DB.prepare("DELETE FROM invites"),
+      logStmt(env, { area: "Employees", target: username, action: "Owner account created", to: name }, owner),
+      logStmt(env, { area: "Login", target: username, action: "Logged in" }, owner)
+    ]);
+    owner.username = username;
+    return json({ token: await startSession(env, owner.id), user: owner }, 201);
   }
 
-  /* ----- everything below needs a signed-in user ----- */
-  const user = await requireUser(request, env);
+  if (what === "login" && method === "POST") {
+    const b = await body(request, 5000);
+    const username = String(b.username || "").trim().toLowerCase().slice(0, 60);
+    const password = String(b.password || "").slice(0, 200);
+    const since = new Date(Date.now() - FAIL_WINDOW_MIN * 60000).toISOString();
+    const fails = await env.DB.prepare("SELECT COUNT(*) AS n FROM login_fails WHERE email = ? AND at > ?").bind(username, since).first();
+    if (fails.n >= MAX_FAILS) fail(429, `Too many wrong tries. Please wait ${FAIL_WINDOW_MIN} minutes and try again.`);
+    const row = await env.DB.prepare("SELECT * FROM accounts WHERE username = ?").bind(username).first();
+    const hash = await hashPassword(password, row ? row.pass_salt : "00".repeat(16));
+    if (!row || !sameText(hash, row.pass_hash)) {
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO login_fails (email, at) VALUES (?, ?)").bind(username, now()),
+        env.DB.prepare("DELETE FROM login_fails WHERE at < ?").bind(new Date(Date.now() - 864e5).toISOString())
+      ]);
+      fail(401, "Wrong username or password.");
+    }
+    const user = userFromRow(row);
+    if (!user.active) fail(403, "This account is switched off. Please ask the owner.");
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM login_fails WHERE email = ?").bind(username),
+      env.DB.prepare("DELETE FROM sessions WHERE expires_at < ?").bind(now()),
+      logStmt(env, { area: "Login", target: username, action: "Logged in" }, user)
+    ]);
+    return json({ token: await startSession(env, user.id), user: userOut(user, user) });
+  }
 
-  if (what === "me" && method === "GET") return json({ user: publicUser(user) });
+  /* ===== everything below needs a signed-in, active account ===== */
+  const user = await currentUser(request, env);
+  if (!user) fail(401, "Please log in again.");
 
   if (what === "logout" && method === "POST") {
-    await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(user.token_hash).run();
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(user.tokenHash),
+      logStmt(env, { area: "Login", target: user.username, action: "Logged out" }, user)
+    ]);
     return json({ ok: true });
   }
 
   if (what === "password" && method === "POST") {
     const b = await body(request, 5000);
-    const row = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(user.id).first();
-    if (!sameText(await hashPassword(String(b.current || ""), row.pass_salt), row.pass_hash)) fail(400, "Your current password is not right.");
+    const row = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(user.id).first();
+    if (!sameText(await hashPassword(String(b.current || ""), row.pass_salt), row.pass_hash)) fail(400, "The current password is wrong.");
     const salt = randomHex(16);
     await env.DB.batch([
-      env.DB.prepare("UPDATE users SET pass_hash = ?, pass_salt = ? WHERE id = ?").bind(await hashPassword(checkPassword(b.next), salt), salt, user.id),
-      // Sign out every other device
-      env.DB.prepare("DELETE FROM sessions WHERE user_id = ? AND token_hash != ?").bind(user.id, user.token_hash)
+      env.DB.prepare("UPDATE accounts SET pass_hash = ?, pass_salt = ? WHERE id = ?").bind(await hashPassword(checkPassword(b.next), salt), salt, user.id),
+      env.DB.prepare("DELETE FROM sessions WHERE user_id = ? AND token_hash != ?").bind(user.id, user.tokenHash), // sign out other devices
+      logStmt(env, { area: "Employees", target: user.username, action: "Changed own password" }, user)
     ]);
     return json({ ok: true });
   }
 
-  /* Orders */
-  if (what === "orders") {
-    if (method === "GET" && !id) {
-      const { results } = await env.DB.prepare("SELECT id, created_at, data FROM orders ORDER BY created_at DESC").all();
-      return json({ orders: results.map(orderOut) });
+  /* Everything this person is allowed to see, in one go */
+  if (what === "all" && method === "GET") {
+    const { results } = await env.DB.prepare("SELECT id, username, data FROM accounts").all();
+    const users = results.map(userFromRow).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+    const seeOrders = canAny(user, ["orders.view", ...ORDER_PERMS, "orders.export"]);
+    const seeMessages = canAny(user, ["messages.view", "messages.manage"]);
+    const seeAllLeave = canAny(user, ["hr.approve"]);
+    let history = await listItems(env, "history", "at", HISTORY_LIMIT);
+    if (user.role !== "owner") {
+      history = history.filter(
+        (h) =>
+          h.byId === user.id ||
+          (can(user, "history.view") && h.area !== "HR" && h.area !== "Employees" && h.area !== "Login") ||
+          (seeOrders && h.area === "Order") ||
+          (seeMessages && h.area === "Message")
+      );
     }
-    if (method === "PATCH" && id) {
-      const row = await loadOrder(env, id);
-      const b = await body(request);
-      const next = JSON.parse(row.data);
-      if (b.status !== undefined) {
-        if (!STATUSES.includes(b.status)) fail(400, "Unknown status.");
-        next.status = b.status;
-      }
-      await env.DB.prepare("UPDATE orders SET data = ? WHERE id = ?").bind(JSON.stringify(next), id).run();
-      return json({ order: orderOut({ id, created_at: row.created_at, data: JSON.stringify(next) }) });
+    const leave = await listItems(env, "leave", "createdAt");
+    const payroll = {};
+    if (user.role === "owner") {
+      const { results: pay } = await env.DB.prepare("SELECT id, data FROM items WHERE coll = 'payroll'").all();
+      pay.forEach((r) => (payroll[r.id] = JSON.parse(r.data)));
     }
-    if (method === "DELETE" && id) {
-      await env.DB.prepare("DELETE FROM orders WHERE id = ?").bind(id).run();
-      return json({ ok: true });
-    }
+    return json({
+      me: userOut(user, user),
+      users: users.map((u) => userOut(u, user)),
+      orders: seeOrders ? await listItems(env, "orders", "createdAt") : [],
+      messages: seeMessages ? await listItems(env, "messages", "createdAt") : [],
+      history,
+      leave: seeAllLeave ? leave : leave.filter((l) => l.userId === user.id),
+      payroll
+    });
   }
 
-  /* Messages */
-  if (what === "messages") {
-    if (method === "GET" && !id) {
-      const { results } = await env.DB.prepare("SELECT id, created_at, data FROM messages ORDER BY created_at DESC").all();
-      return json({ messages: results.map(messageOut) });
+  /* Save one record */
+  if (what === "items" && method === "PUT" && id && parts[3]) {
+    const coll = id;
+    const itemId = decodeURIComponent(parts[3]);
+    if (!["orders", "messages", "leave", "payroll"].includes(coll)) fail(400, "Unknown list.");
+    if (itemId.length > 80) fail(400, "Bad id.");
+    const next = await body(request, 100000);
+    if (!next || typeof next !== "object" || Array.isArray(next)) fail(400, "Bad record.");
+    if (coll !== "payroll") next.id = itemId;
+    const existing = await getItem(env, coll, itemId);
+    if (!mayWrite(user, coll, next, existing && existing.data)) fail(403, "You don't have permission to do this. Please ask the owner.");
+    await env.DB.prepare(
+      "INSERT INTO items (coll, id, data, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(coll, id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at"
+    )
+      .bind(coll, itemId, JSON.stringify(next), now())
+      .run();
+    return json({ ok: true });
+  }
+
+  /* History line from the dashboard (who and when are set here) */
+  if (what === "history" && method === "POST") {
+    const b = await body(request, 10000);
+    if (b.area === "Login") fail(400, "Logins are recorded by the server.");
+    const h = historyRow(b, user);
+    await env.DB.prepare("INSERT INTO items (coll, id, data, updated_at) VALUES ('history', ?, ?, ?)").bind(h.id, JSON.stringify(h), h.at).run();
+    return json({ entry: h }, 201);
+  }
+
+  /* Owner: add or change an employee */
+  if (what === "users" && method === "PUT" && id) {
+    if (user.role !== "owner") fail(403, "Only the owner can change accounts.");
+    const b = await body(request, 20000);
+    const row = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(id).first();
+    const username = checkUsername(b.username);
+    const taken = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? AND id != ?").bind(username, id).first();
+    if (taken) fail(409, "That username is already taken.");
+    const old = row ? userFromRow(row) : null;
+    const isOwner = old && old.role === "owner";
+    const perms = Array.isArray(b.perms) ? b.perms.filter((p) => typeof p === "string").slice(0, 50) : [];
+    const data = {
+      name: text(b.name, 100, "the name"),
+      role: isOwner ? "owner" : "employee",
+      perms: isOwner ? [] : perms,
+      active: isOwner ? true : b.active !== false,
+      createdAt: old ? old.createdAt : now(),
+      createdBy: old ? old.createdBy : user.name
+    };
+    if (b.hr && typeof b.hr === "object") data.hr = b.hr;
+    else if (old && old.hr) data.hr = old.hr;
+    const stmts = [];
+    if (!row) {
+      const salt = randomHex(16);
+      stmts.push(
+        env.DB.prepare("INSERT INTO accounts (id, username, pass_hash, pass_salt, data) VALUES (?, ?, ?, ?, ?)")
+          .bind(id, username, await hashPassword(checkPassword(b.password), salt), salt, JSON.stringify(data))
+      );
+    } else {
+      stmts.push(env.DB.prepare("UPDATE accounts SET username = ?, data = ? WHERE id = ?").bind(username, JSON.stringify(data), id));
+      if (b.password) {
+        const salt = randomHex(16);
+        stmts.push(env.DB.prepare("UPDATE accounts SET pass_hash = ?, pass_salt = ? WHERE id = ?").bind(await hashPassword(checkPassword(b.password), salt), salt, id));
+      }
+      // Switched off or new password: sign them out everywhere
+      if (b.password || (old.active && !data.active)) stmts.push(env.DB.prepare("DELETE FROM sessions WHERE user_id = ? AND user_id != ?").bind(id, user.id));
     }
-    if (method === "PATCH" && id) {
-      const row = await env.DB.prepare("SELECT * FROM messages WHERE id = ?").bind(id).first();
-      if (!row) fail(404, "Message not found.");
-      const b = await body(request, 2000);
-      const next = Object.assign(JSON.parse(row.data), { read: !!b.read });
-      await env.DB.prepare("UPDATE messages SET data = ? WHERE id = ?").bind(JSON.stringify(next), id).run();
-      return json({ ok: true });
-    }
-    if (method === "DELETE" && id) {
-      await env.DB.prepare("DELETE FROM messages WHERE id = ?").bind(id).run();
-      return json({ ok: true });
-    }
+    await env.DB.batch(stmts);
+    return json({ user: userOut(Object.assign(data, { id, username }), user) });
   }
 
   /* Content */
   if (what === "content" && method === "PUT") {
+    if (!canAny(user, ["programs.edit", "photos.edit"])) fail(403, "You don't have permission to do this. Please ask the owner.");
     const raw = await request.text();
     if (raw.length > 500000) fail(413, "That is too much data.");
     let content;
@@ -374,10 +520,12 @@ async function route(request, env, url) {
     }
     if (!content || typeof content.programs !== "object" || !Array.isArray(content.categories)) fail(400, "Bad content.");
     const data = JSON.stringify(content);
-    await env.DB.prepare("INSERT INTO content (key, data, updated_at) VALUES ('site', ?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at")
+    await env.DB.prepare(
+      "INSERT INTO content (key, data, updated_at) VALUES ('site', ?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at"
+    )
       .bind(data, now())
       .run();
-    // Remove uploaded photos that are no longer used anywhere
+    // Remove uploaded photos that are no longer used anywhere (hidden photos are still kept)
     const { results } = await env.DB.prepare("SELECT id FROM photos").all();
     const unused = results.filter((r) => !data.includes(`/photos/${r.id}`));
     if (unused.length) await env.DB.batch(unused.map((r) => env.DB.prepare("DELETE FROM photos WHERE id = ?").bind(r.id)));
@@ -386,6 +534,7 @@ async function route(request, env, url) {
 
   /* Photo upload (already made small by the dashboard) */
   if (what === "photos" && method === "POST") {
+    if (!can(user, "photos.edit")) fail(403, "You don't have permission to do this. Please ask the owner.");
     const type = (request.headers.get("Content-Type") || "").split(";")[0];
     if (!["image/jpeg", "image/png", "image/webp"].includes(type)) fail(400, "Please upload a JPG, PNG or WebP photo.");
     const bytes = await request.arrayBuffer();
@@ -395,25 +544,11 @@ async function route(request, env, url) {
     return json({ url: `${url.origin}/photos/${photoId}` }, 201);
   }
 
-  /* Accounts */
-  if (what === "users" && method === "GET") {
-    const { results } = await env.DB.prepare("SELECT id, email, name, created_at FROM users ORDER BY id").all();
-    return json({ users: results.map((u) => ({ id: u.id, email: u.email, name: u.name, createdAt: u.created_at })), me: user.id });
-  }
-  if (what === "users" && method === "DELETE" && id) {
-    if (Number(id) === user.id) fail(400, "You cannot remove your own account.");
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(Number(id)),
-      env.DB.prepare("DELETE FROM users WHERE id = ?").bind(Number(id))
-    ]);
+  /* Owner: start fresh (accounts are kept) */
+  if (what === "reset" && method === "POST") {
+    if (user.role !== "owner") fail(403, "Only the owner can do this.");
+    await env.DB.prepare("DELETE FROM items WHERE coll IN ('orders', 'messages', 'history', 'leave', 'payroll')").run();
     return json({ ok: true });
-  }
-  if (what === "invites" && method === "POST") {
-    const code = randomHex(20);
-    await env.DB.prepare("INSERT INTO invites (code_hash, created_by, created_at, expires_at) VALUES (?, ?, ?, ?)")
-      .bind(await sha256(code), user.id, now(), addDays(INVITE_DAYS))
-      .run();
-    return json({ code, expiresAt: addDays(INVITE_DAYS) }, 201);
   }
 
   fail(404, "Not found.");

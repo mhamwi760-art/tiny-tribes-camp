@@ -142,7 +142,7 @@ function initContactForm() {
     const btn = $("button[type=submit]", form);
     btn.disabled = true;
     try {
-      await window.TTStore.addMessage({
+      await window.TTStore.submitMessage({
         name: form.elements["c-name"].value.trim(),
         phone: form.elements["c-phone"].value.trim(),
         email: form.elements["c-email"].value.trim(),
@@ -651,6 +651,7 @@ function initRegistration() {
     btn.disabled = true;
     try {
       // Update the same order if the parent came back to edit it
+      // (the server records the change in the dashboard history)
       let saved = null;
       if (draft && draft.id && draft.editToken) {
         try {
@@ -660,7 +661,7 @@ function initRegistration() {
         }
       }
       if (!saved) {
-        const res = await window.TTStore.addOrder(order);
+        const res = await window.TTStore.submitOrder(order);
         saved = Object.assign(res.order, { editToken: res.editToken });
       }
       saveDraft(saved);
@@ -738,6 +739,7 @@ function initPayment() {
     setTimeout(async () => {
       const method = $('input[name="method"]:checked', form).value.toUpperCase();
       try {
+        // The server records the change in the dashboard history
         await window.TTStore.updateOwnOrder(reg.id, reg.editToken, { status: "Paid (demo)", method });
       } catch (err) {
         alert(err.message);

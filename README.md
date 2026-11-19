@@ -23,7 +23,7 @@ Open the folder in VS Code, install the recommended **Live Server** extension, t
 
 ## Still to connect
 - **Payment:** `payment.html` is a mock-up. Connecting KNET or cards needs a payment provider (for example Tap or MyFatoorah) and a small server to create the payment securely. The spot to change is marked `DEMO ONLY` in `js/main.js`.
-- **Dashboard data and login:** orders, messages, prices, photos and team accounts are saved online in a Cloudflare Worker with a D1 database (code in `api/`, live at `https://tiny-tribes-api.tinytribescamp.workers.dev`). The dashboard needs a sign-in. New team members get a one-time invite link from the Accounts tab and choose their own password. To update the backend: `cd api` then `npx wrangler deploy`. The table layout is in `api/schema.sql`.
+- **Dashboard data and login:** orders, messages, prices, photos, accounts, leave, payroll and history are saved online in a Cloudflare Worker with a D1 database (code in `api/`, live at `https://tiny-tribes-api.tinytribescamp.workers.dev`). Logins and permissions are checked by the server. The owner account is created once from a one-time link (`dashboard.html#setup=CODE`); the owner then adds employees in the dashboard. To update the backend: `cd api` then `npx wrangler deploy`. The table layout is in `api/schema.sql`.
 
 ## Hosting on GitHub Pages
 Push this folder to a GitHub repository, then go to the repository's **Settings → Pages** and pick the `main` branch and the `/ (root)` folder.
