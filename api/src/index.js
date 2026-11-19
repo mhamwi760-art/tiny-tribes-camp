@@ -475,7 +475,9 @@ async function route(request, env, url) {
     const taken = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? AND id != ?").bind(username, id).first();
     if (taken) fail(409, "That username is already taken.");
     const old = row ? userFromRow(row) : null;
-    const isOwner = old && old.role === "owner";
+    // An owner can make other people owners, or turn them back into employees.
+    // Your own role never changes here, so the last owner can't lock everyone out.
+    const isOwner = old && old.id === user.id ? true : b.role === "owner";
     const perms = Array.isArray(b.perms) ? b.perms.filter((p) => typeof p === "string").slice(0, 50) : [];
     const data = {
       name: text(b.name, 100, "the name"),

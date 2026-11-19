@@ -14,7 +14,10 @@
    ========================================================== */
 
 (function () {
-  const API = "https://tiny-tribes-api.tinytribescamp.workers.dev";
+  // On this computer (localhost) a test backend can be used instead: localStorage "tt-api"
+  const API =
+    (location.hostname === "localhost" && (() => { try { return localStorage.getItem("tt-api"); } catch (e) { return null; } })()) ||
+    "https://tiny-tribes-api.tinytribescamp.workers.dev";
   const CACHE_KEY = "tt-live-content"; // last content seen, so pages still work if the network is slow
   const TOKEN_KEY = "tt-dash-token"; // kept for this browser tab only, like before
 
@@ -210,7 +213,7 @@
         const before = db.users.find((x) => x.id === u.id);
         const { password, ...rest } = u;
         if (before && !password && JSON.stringify(before) === JSON.stringify(rest)) return;
-        const body = { name: u.name, username: u.username, perms: u.perms || [], active: u.active !== false, hr: u.hr, password: password || undefined };
+        const body = { name: u.name, username: u.username, role: u.role, perms: u.perms || [], active: u.active !== false, hr: u.hr, password: password || undefined };
         jobs.push(send(`/api/users/${encodeURIComponent(u.id)}`, { method: "PUT", body }));
         delete u.password;
       });

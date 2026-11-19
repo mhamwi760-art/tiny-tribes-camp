@@ -1123,12 +1123,18 @@
         }</p>
         <small>Added ${u.createdAt ? fmtDate(u.createdAt) : ""}${u.createdBy ? ` by ${esc(u.createdBy)}` : ""}</small>
         ${
-          u.role === "owner"
-            ? ""
-            : `<div class="message-actions">
-                 <button class="link-btn edit-employee">Edit name, password or permissions</button>
-                 <button class="link-btn toggle-employee">${u.active ? "Switch off login" : "Switch on login"}</button>
-               </div>`
+          u.id === me.id
+            ? `<p class="hint">This is you.</p>`
+            : u.role === "owner"
+              ? `<div class="message-actions">
+                   <button class="link-btn edit-employee">Edit name or password</button>
+                   <button class="link-btn set-owner" data-role="employee">Remove owner (make employee)</button>
+                 </div>`
+              : `<div class="message-actions">
+                   <button class="link-btn edit-employee">Edit name, password or permissions</button>
+                   <button class="link-btn toggle-employee">${u.active ? "Switch off login" : "Switch on login"}</button>
+                   ${u.active ? `<button class="link-btn set-owner" data-role="owner">Make owner</button>` : ""}
+                 </div>`
         }
       </article>`
       )
@@ -1153,6 +1159,18 @@
       $("#e-pass-label").textContent = "New password (leave empty to keep the old one)";
       $("#employee-cancel").classList.remove("hidden");
       $("#employee-form").scrollIntoView({ behavior: "smooth" });
+    }
+    if (e.target.matches(".set-owner")) {
+      const toOwner = e.target.dataset.role === "owner";
+      const question = toOwner
+        ? `Make ${u.name} an owner? Owners can do everything, including seeing salaries and adding or removing owners.`
+        : `Remove ${u.name} as owner? They become an employee with no permissions until you give them some.`;
+      if (!confirm(question)) return;
+      u.role = toOwner ? "owner" : "employee";
+      u.perms = [];
+      store.saveUsers(users);
+      store.log({ area: "Employees", target: u.username, action: `Role changed for ${u.name}`, from: toOwner ? "Employee" : "Owner", to: toOwner ? "Owner" : "Employee" });
+      renderEmployees();
     }
     if (e.target.matches(".toggle-employee")) {
       const turnOn = !u.active;
